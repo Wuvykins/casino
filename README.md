@@ -1,0 +1,129 @@
+# The Casino
+
+A private, Hoyle-Casino-style casino for the phone. Vanilla HTML/JS, no build step, one save on the device.
+
+**Live now:** lobby, bank and five credit-card tiers, Ken's bailout, Texas Hold'em (limit and no-limit) with personality-driven opponents, and Blackjack (6 decks, dealer stands on 17, 3:2, double any two, double after split, split to 4 hands, insurance) with up to two of the family playing beside you.
+**Coming:** Slots, Farkle, Cribbage (their doors are in the lobby already).
+
+## Put it on your phone (the real thing)
+
+The game is a web app that installs to the home screen and then runs offline. It needs to live at an https address once; free static hosting is fine — GitHub Pages is the simplest:
+
+1. Make a new **public** repository on github.com (e.g. `casino`), then **Add file → Upload files** and drag the whole contents of this folder in (everything except `node_modules`). Commit.
+2. Repo **Settings → Pages → Source: Deploy from a branch → main / (root) → Save.** A minute later it's live at `https://<your-username>.github.io/casino/`.
+3. Open that address in **Safari** on the iPhone/iPad, tap **Share → Add to Home Screen**. From then on it opens full-screen from its own icon, in landscape, with no browser bars, and it works with no internet.
+
+Updating: upload the changed files again (run `python3 tools/build_sw.py` first so `sw.js` lists the new version). The phone fetches the update in the background and uses it the next time the app is opened.
+
+## Run it locally
+
+```
+python3 serve.py
+```
+
+It prints two addresses. Open the phone one in Safari on your iPhone/iPad (same Wi-Fi), tap **Share → Add to Home Screen**, and it runs full-screen like an app. The computer running `serve.py` has to be on when you open it. Play in landscape.
+
+## Two ways to play
+
+- **Live link (for testing as we build):** the game is also published as a Claude artifact. Every change is pushed to the same link; just reload. Saves live on each device that opens it.
+- **Home network (the real thing):** `python3 serve.py` on a computer, open the phone address in Safari, Add to Home Screen. Full-screen, works like an app, and you can drop art files in yourself.
+
+## How the money works
+
+- Your money lives in the **bank**. Sitting at a table buys chips out of the bank; leaving cashes them back in.
+- Your **card** is re-evaluated every time you cash out (or get bailed out): Basic → Silver ($5,000) → Gold ($25,000) → Black ($100,000). Higher cards unlock higher tables. Lose it back and the card downgrades.
+- Bust at a table → rebuy from the bank or go to the lobby. Bank too low to play → the **Ask Ken** button appears by the bank statement. Ken gives you the starting $1,000 back and says what he says. (His lines are in `js/content/characters.js` under `BANKER`.)
+- Reload mid-session and your chips go back to the bank automatically.
+
+Tier thresholds and table stakes are plain numbers in `js/content/tiers.js` and `js/content/tables.js`.
+
+## Replacing the art
+
+Every piece of art has a fixed file name under `assets/`. Drop a PNG or JPG in with that exact name and it takes over on the next reload; nothing else changes. Settings → "Art files" shows what's still a placeholder. Transparent backgrounds where it makes sense (chips, dealer button, portraits).
+
+| What | File | Size (px) | Notes |
+|---|---|---|---|
+| Casino floor (lobby background) | `assets/img/lobby/floor.png` or `.jpg` | 2048×1024 | landscape. When present, the five door tiles disappear and the games become tap regions over your painted signs — positions are in `js/content/lobby.js` (`LOBBY_HOTSPOTS`, percentages of the picture; set `SHOW_HOTSPOT_GUIDES = true` to see the boxes while lining them up) |
+| Game doors / signs (5) | `assets/img/lobby/door-holdem.png`, `door-blackjack.png`, `door-slots.png`, `door-farkle.png`, `door-cribbage.png` | 600×800 | portrait tiles; name is overlaid at the bottom |
+| Cashier window | `assets/img/lobby/cashier.png` | 600×400 | not shown yet — reserved for the bank screen |
+| Ken | `assets/img/portraits/ken.png` | 512×512 | shown in the bailout scene |
+| Credit cards (5) | `assets/img/cards/credit-1.png` … `credit-5.png` | 860×540 | Basic, Silver, Gold, Platinum, Sovereign. Corners are rounded by the game |
+| Poker table felt | `assets/img/table/felt-holdem.png` | 2048×1024 | the whole table area incl. rail; seats sit around the edge, board dead centre |
+| Blackjack table felt | `assets/img/table/felt-blackjack.png` | 2048×1024 | dealer's cards top centre, your cards centre, friends at 16% and 84% across; falls back to the poker felt |
+| Dealer button | `assets/img/table/dealer-button.png` | 128×128 | |
+| Card back | `assets/img/cards/back.png` | 250×350 | |
+| Card faces (optional) | `assets/img/cards/AS.png`, `TD.png`, `2C.png` … | 250×350 | rank `2-9 T J Q K A` + suit `S H D C`. Any you don't supply stay drawn by the game |
+| Chips (7) | `assets/img/chips/1.png`, `5.png`, `25.png`, `100.png`, `500.png`, `1000.png`, `5000.png` | 256×256 | top-down view; they're stacked with a small offset |
+| Portraits | `assets/img/portraits/<id>.png` | 512×512 | one per character. Optional `<id>-happy.png`, `<id>-mad.png` |
+| App icon | `assets/img/icon-180.png`, `icon-512.png` | 180 / 512 | home-screen icon |
+
+## The cast
+
+`js/content/characters.js`. Each person has an `id` (used for file names), a `name`, a `tagline`, and five dials from 0 to 1:
+
+| Dial | 0 | 1 |
+|---|---|---|
+| `skill` | misreads hands and odds, never adjusts to opponents | reads ranges accurately, adjusts to who's betting |
+| `tight` | plays every hand | plays only premiums |
+| `aggro` | checks and calls | bets and raises |
+| `bluff` | never bluffs | bluffs constantly |
+| `tilt` | ice | loses a big pot and starts spewing |
+
+Then `lines`: banter per trigger, each entry either plain text or `{ text, file }` when there's a recording for it (generic lines from `js/content/lines.js` fill any gaps).
+
+## Voice lines
+
+Files go in `assets/voice/<id>/`, and each line in `characters.js` names its own file, e.g. `fold: [{ text: "Not with that.", file: "fold_1.m4a" }, "Nope."]`. iPhone voice memos export as .m4a, which is exactly right. When a recording plays, the text bubble still shows.
+
+Triggers, roughly in order of how often you'll hear them:
+
+| Trigger | When | Suggested takes |
+|---|---|---|
+| `fold` | they fold | 3 |
+| `check` | they check | 2 |
+| `call` | they call | 3 |
+| `raise` | they bet or raise | 3 |
+| `allin` | they go all in | 2 |
+| `winSmall` | they win a small pot | 2 |
+| `winBig` | they win a pot over 25 big blinds | 3 |
+| `lose` | they lose at showdown | 2 |
+| `badBeat` | they lose at showdown with a strong hand | 3 |
+| `caughtBluff` | they bet, got called, and had nothing | 2 |
+| `hit` / `stand` / `double` / `split` | blackjack decisions | 2 each |
+| `bust` | they go over 21 | 3 |
+| `blackjack` | they're dealt a natural | 2 |
+| `push` | they tie the dealer | 1 |
+| `dealerBust` | the dealer busts | 2 |
+| `hurry` | you've taken more than 14 s to act | 3 |
+| `greet` | when you sit down | 2 |
+| `bustOut` | they lose their whole stack | 2 |
+| `rebuy` | they buy back in | 1 |
+| `playerBust` | **you** bust | 2 |
+| `playerWin` | you win a big pot | 2 |
+| `idle` | filler | 2 |
+
+Ken has `bailout` and `bailoutAgain`, in `assets/voice/ken/`.
+
+## Sound effects
+
+Synthesised placeholders play until you drop files in `assets/sfx/<name>.mp3` (or .m4a/.wav): `tap chip chips deal flip check fold win bigwin lose allin tierup tierdown bailout shuffle yourturn`.
+
+## Tests
+
+```
+npm test        # hand evaluator, engine rules, chip conservation fuzz, and a cast simulation
+npm run test:ui # headless-browser play-through (needs: npm install)
+```
+
+`node tests/ai.sim.mjs nolimit 5000` prints a table of how each character does against the others — handy when you tune someone's dials.
+
+## Layout
+
+```
+index.html, css/app.css, serve.py
+js/core/      cards, evaluator, poker (the rules engine), ai (opponents), bank, assets, audio
+js/content/   characters, lines, tiers, tables      ← the things you'll edit
+js/ui/        lobby, holdemSelect, holdemTable, components, dom
+assets/       your art, sounds, voices
+tests/
+```
