@@ -112,7 +112,7 @@ export class HoldemTable {
     audio.play('shuffle');
     this.say(null, `Welcome to ${this.table.name}. Blinds ${fmt$(this.table.sb)}/${fmt$(this.table.bb)}.`);
     await this.wait(600);
-    for (const s of this.seats.slice(1)) if (this.rng.chance(0.5)) { this.talk(s, 'greet'); await this.wait(500); }
+    for (const s of this.seats.slice(1)) if (this.talk(s, 'greet', {}, 0.5)) await this.wait(500);
     await this.wait(600);
     while (!this.stopped) {
       await this.playHand();
@@ -370,15 +370,18 @@ export class HoldemTable {
     const label = ev.action === 'fold' ? 'Fold' : ev.action === 'check' ? 'Check' : ev.action === 'call' ? `Call ${fmt$(ev.amount)}` : ev.action === 'bet' ? `Bet ${fmt$(ev.to)}` : `Raise to ${fmt$(ev.to)}`;
     this.setTag(seat.id, p.allIn && ev.action !== 'fold' ? 'ALL IN' : label, ev.action);
     const E = this.seatEls[seat.id];
-    if (ev.action === 'fold') { E.seatEl.classList.add('folded'); if (!seat.isHuman) clear(E.cards); audio.play('fold'); }
+    if (ev.action === 'fold') {
+      E.seatEl.classList.add('folded'); if (!seat.isHuman) clear(E.cards); audio.play('fold');
+      if (seat.isHuman && this.hand.lastAggressor && this.hand.lastAggressor !== HUMAN) { const a = this.seatById(this.hand.lastAggressor); if (a) setTimeout(() => this.talk(a, 'tauntPoker', {}, 0.3), 500); }
+    }
     else if (ev.action === 'check') audio.play('check');
     else if (p.allIn) { audio.play('allin'); E.seatEl.classList.add('allin'); }
     else audio.play(ev.amount > this.table.bb * 6 ? 'chips' : 'chip');
     this.renderMoney();
     if (!seat.isHuman) {
-      const trig = p.allIn && ev.action !== 'fold' ? 'allin' : ev.action === 'bet' ? 'raise' : ev.action;
-      const prob = trig === 'allin' ? 1 : trig === 'raise' ? 0.55 : trig === 'fold' ? 0.25 : 0.3;
-      if (this.rng.chance(prob)) this.talk(seat, trig);
+      const trig = action.why === 'too much checking' ? 'tooMuchChecking' : p.allIn && ev.action !== 'fold' ? 'allin' : ev.action === 'bet' ? 'raise' : ev.action;
+      const prob = trig === 'allin' ? 1 : trig === 'tooMuchChecking' ? 0.9 : trig === 'raise' ? 0.55 : trig === 'fold' ? 0.25 : 0.3;
+      this.talk(seat, trig, {}, prob);
     }
   }
 
@@ -401,13 +404,18 @@ export class HoldemTable {
   highlightActor(id) { for (const [k, E] of Object.entries(this.seatEls)) E.seatEl.classList.toggle('acting', k === id); }
   say(seat, text) { this.msgEl.textContent = text; }
 
-  talk(seat, trigger, vars = {}) {
+  // p = how likely they are to say something here; a character's `chatty` dial scales it (2 = twice as mouthy, 0.5 = quiet).
+  // The text bubble always shows, and the recording plays too when the line has one.
+  talk(seat, trigger, vars = {}, p = 1) {
+    if (!seat?.char) return false;
+    if (!this.rng.chance(Math.min(1, p * (seat.char.persona?.chatty ?? 1)))) return false;
     const line = pickLine(seat.char, trigger, { player: this.human.name, ...vars }, this.rng);
-    if (!line) return;
+    if (!line) return false;
     audio.voice(seat.char, line.file);          // the recording, if this line has one
-    const E = this.seatEls[seat.id]; if (!E) return;
+    const E = this.seatEls[seat.id]; if (!E) return false;
     E.bubble.textContent = line.text || '…'; E.bubble.classList.add('show');
     clearTimeout(E.bubbleT); E.bubbleT = setTimeout(() => E.bubble.classList.remove('show'), 2600);
+    return true;
   }
 
   playHandInfo() {
@@ -501,17 +509,17 @@ export class HoldemTable {
       updateMood(s.char.persona, s.mood, net, this.table.bb);
       const expr = bigForThem ? 'happy' : net <= -8 * this.table.bb ? 'mad' : null;
       if (expr) this.setExpression(s, expr);
-      if (won) { if (this.rng.chance(bigForThem ? 0.9 : 0.35)) this.talk(s, bigForThem ? 'winBig' : 'winSmall'); }
+      if (won) { this.talk(s, bigForThem ? 'winBig' : 'winSmall', {}, bigForThem ? 0.9 : 0.35); }
       else if (rev) {
         const cat = category(rev.score);
-        if (cat >= 3 || (cat === 2 && -net >= this.table.bb * 12)) { if (this.rng.chance(0.85)) this.talk(s, 'badBeat'); }
-        else if (hand.lastAggressor === s.id && cat <= 1) { if (this.rng.chance(0.7)) this.talk(s, 'caughtBluff'); }
-        else if ((res.net[s.id] || 0) <= -25 * this.table.bb) { if (this.rng.chance(0.85)) this.talk(s, 'loseBig'); }
-        else if (this.rng.chance(0.4)) this.talk(s, 'lose');
+        if (cat >= 3 || (cat === 2 && -net >= this.table.bb * 12)) { this.talk(s, 'badBeat', {}, 0.85); }
+        else if (hand.lastAggressor === s.id && cat <= 1) { this.talk(s, 'caughtBluff', {}, 0.7); }
+        else if ((res.net[s.id] || 0) <= -25 * this.table.bb) { this.talk(s, 'loseBig', {}, 0.85); }
+        else this.talk(s, 'lose', {}, 0.4);
       }
       if (s.stack <= 0) { this.talk(s, 'bustOut'); this.updateSeat(s); }
     }
-    if (humanWon && bigPot) { const s = this.rng.pick(this.seats.slice(1)); if (s && this.rng.chance(0.5)) setTimeout(() => this.talk(s, 'playerWin'), 900); }
+    if (humanWon && bigPot) { const s = this.rng.pick(this.seats.slice(1)); if (s) setTimeout(() => this.talk(s, 'playerWin', {}, 0.5), 900); }
     if (humanNet < 0 && !humanWon) audio.play('lose', { volume: 0.4 });
     await this.wait(1600);
   }

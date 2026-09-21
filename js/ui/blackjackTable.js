@@ -78,14 +78,16 @@ export class BlackjackTable {
   }
 
   say(text) { this.msgEl.textContent = text; }
-  talk(seat, trigger, vars = {}) {
-    if (seat.isHuman) return;
+  talk(seat, trigger, vars = {}, p = 1) {
+    if (seat.isHuman) return false;
+    if (!this.rng.chance(Math.min(1, p * (seat.char.persona?.chatty ?? 1)))) return false;
     const line = pickLine(seat.char, trigger, { player: this.human.name, ...vars }, this.rng);
-    if (!line) return;
+    if (!line) return false;
     audio.voice(seat.char, line.file);
     const E = this.seatEls[seat.id];
     E.bubble.textContent = line.text; E.bubble.classList.add('show');
     clearTimeout(E.bubbleT); E.bubbleT = setTimeout(() => E.bubble.classList.remove('show'), 2600);
+    return true;
   }
   updateStack(s) { this.seatEls[s.id].stackEl.textContent = fmt$(s.stack); }
 
@@ -93,7 +95,7 @@ export class BlackjackTable {
   async run() {
     audio.play('shuffle');
     this.say(`Welcome to ${this.table.name}. Place your bet.`);
-    for (const s of this.seats) if (!s.isHuman && this.rng.chance(0.6)) { this.talk(s, 'greet'); await this.wait(500); }
+    for (const s of this.seats) if (!s.isHuman && this.talk(s, 'greet', {}, 0.6)) await this.wait(500);
     while (!this.stopped) {
       const ok = await this.bettingPhase();
       if (!ok) break;
@@ -192,7 +194,7 @@ export class BlackjackTable {
       if (this.stopped) return;
       if (action === 'double' || action === 'split') { seat.stack -= hand.bet; this.updateStack(seat); }
       round.act(action);
-      if (!seat.isHuman && this.rng.chance(action === 'hit' || action === 'stand' ? 0.3 : 0.7)) this.talk(seat, action);
+      if (!seat.isHuman) this.talk(seat, action, {}, action === 'hit' || action === 'stand' ? 0.3 : 0.7);
       await this.drain();
     }
     this.highlight(null);
@@ -274,7 +276,8 @@ export class BlackjackTable {
         case 'bust': {
           const seat = this.seatById(ev.playerId); const E = this.seatEls[ev.playerId];
           this.tag(this.handEl(E, ev.handIndex), 'Bust', 'lose');
-          if (!seat.isHuman && this.rng.chance(0.7)) this.talk(seat, 'bust');
+          if (!seat.isHuman) this.talk(seat, 'bust', {}, 0.7);
+          else { const o = this.seats.filter((x) => !x.isHuman); if (o.length) this.talk(this.rng.pick(o), 'tauntBlackjack', {}, 0.3); }
           await this.wait(350);
           break;
         }
@@ -326,7 +329,7 @@ export class BlackjackTable {
 
   async settleUI() {
     const r = this.round; const res = r.results;
-    if (res.dealerBust) { this.say(`Dealer busts with ${res.dealerTotal}.`); audio.play('chips'); for (const s of this.seats) if (!s.isHuman && this.rng.chance(0.6)) this.talk(s, 'dealerBust'); }
+    if (res.dealerBust) { this.say(`Dealer busts with ${res.dealerTotal}.`); audio.play('chips'); for (const s of this.seats) if (!s.isHuman) this.talk(s, 'dealerBust', {}, 0.6); }
     else this.say(res.dealerBlackjack ? 'Dealer has blackjack.' : `Dealer stands on ${res.dealerTotal}.`);
     await this.wait(500);
     let humanNet = 0, humanNatural = false, humanBet = 0;
@@ -346,14 +349,14 @@ export class BlackjackTable {
       if (seat.isHuman) { humanNet = pr.net; humanBet = pr.hands.reduce((s, x) => s + x.bet, 0); humanNatural = pr.hands.some((x) => x.result === 'blackjack'); }
       else if (pr.net > 0) {
         const natural = pr.hands.some((x) => x.result === 'blackjack');
-        if (this.rng.chance(0.5)) this.talk(seat, natural ? 'blackjack' : pr.net >= this.table.minBet * 6 ? 'winBig' : 'winSmall');
+        this.talk(seat, natural ? 'blackjack' : pr.net >= this.table.minBet * 6 ? 'winBig' : 'winSmall', {}, 0.5);
         if (natural || pr.net >= this.table.minBet * 6) this.setExpression(seat, 'happy');
       }
       else if (pr.net < 0) {
-        if (this.rng.chance(0.35)) this.talk(seat, pr.net <= -this.table.minBet * 6 ? 'loseBig' : 'lose');
+        this.talk(seat, pr.net <= -this.table.minBet * 6 ? 'loseBig' : 'lose', {}, 0.35);
         if (pr.net <= -this.table.minBet * 4 || pr.hands.some((x) => x.result === 'bust')) this.setExpression(seat, 'mad');
       }
-      else if (pr.net === 0 && this.rng.chance(0.4)) this.talk(seat, 'push');
+      else if (pr.net === 0) this.talk(seat, 'push', {}, 0.4);
       if (pr.net > 0) this.flyChips(this.dealerEl, E.betEl, pr.net);
       else if (pr.net < 0) this.flyChips(E.betEl, this.dealerEl, -pr.net);
     }

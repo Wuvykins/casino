@@ -225,7 +225,7 @@ export class Hand {
 
   advanceStreet() {
     // gather bets
-    for (const p of this.players) { p.bet = 0; p.actedAtBet = -1; p.needsAction = false; }
+    for (const p of this.players) { p.bet = 0; p.actedAtBet = -1; p.needsAction = false; p.lastAction = null; }
     this.currentBet = 0; this.lastRaiseSize = this.table.bb; this.lastFullRaiseBet = 0; this.raisesThisStreet = 0;
     if (this.street === 'river') return this.showdown();
     this.streetIdx++;

@@ -11,6 +11,10 @@ import { evaluate, category } from './evaluator.js';
 import { gauss } from './rng.js';
 
 const clamp = (x, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, x));
+// Global feel of the table. FAMILY_SKILL scales every character's skill dial (1 = as written, 0.8 = a little sloppier);
+// LIMP_URGE is how much everyone likes to just call the big blind and see a flop when nobody has raised.
+export const FAMILY_SKILL = 0.8;
+export const LIMP_URGE = 0.2;
 
 // ---- preflop strength (Chen formula, normalised to 0..1) ----
 // Reference: AA 1.0, KK .93, AKs .63, AKo .53, KQs .53, JTs .49, 88 .44, A5o .35, 22 .30, 72o 0
@@ -144,7 +148,9 @@ export function readsFromPersonas(seatPersonas) {
 // ---- the decision ----
 export function decide(hand, p, persona, mood, rng, reads = {}) {
   const legal = hand.legalActions(p);
-  const { skill, tight, aggro, bluff } = persona;
+  // Family game, not a card room: everyone plays a notch below their dial and sees more flops.
+  const skill = clamp(persona.skill * FAMILY_SKILL);
+  const { tight, aggro, bluff } = persona;
   const tilt = mood?.tilt || 0;
   const t = clamp(tight - 0.35 * tilt);
   const a = clamp(aggro + 0.3 * tilt);
@@ -199,12 +205,20 @@ export function decide(hand, p, persona, mood, rng, reads = {}) {
       return tag({ type: 'check' }, 'option');
     }
     if (bigDecision) return tag(foldOrCheck(), 'weak');
+    // nobody has raised and it only costs the blind: most of the family just wants to see a flop
+    if (raisesFaced === 0 && toCall <= bb) {
+      const limpThresh = 0.2 + 0.2 * t;                                     // Nic (tight .8) limps A5o-ish and better; Kurtis with almost anything
+      if (perceived > limpThresh || chance(LIMP_URGE + (1 - t) * 0.4)) {
+        if (pos > 0.6 && perceived > callThresh && chance(a * 0.3)) return tag(raiseOr('bluff', callOrCheck), 'steal');
+        return tag(callOrCheck(), 'see a flop');
+      }
+    }
     if (perceived > callThresh || (cheap && perceived > callThresh - 0.1)) {
       if (raisesFaced === 0 && pos > 0.6 && chance(a * 0.3)) return tag(raiseOr('bluff', callOrCheck), 'steal');
       return tag(callOrCheck(), 'playable');
     }
     if (raisesFaced === 0 && chance(bluff * 0.12 + tilt * 0.05)) return tag(raiseOr('bluff', foldOrCheck), 'bluff');
-    if (raisesFaced === 0 && chance((1 - t) * (1 - skill) * 0.2)) return tag(callOrCheck(), 'station');
+    if (raisesFaced === 0 && chance((1 - t) * (1 - skill) * 0.2 * (persona.station || 1))) return tag(callOrCheck(), 'station');
     if (persona.pairLover && p.cards[0].r === p.cards[1].r && toCall <= p.stack * 0.15 && chance(persona.pairLover)) return tag(callOrCheck(), 'pocket pair');
     return tag(foldOrCheck(), 'weak');
   }
@@ -218,6 +232,12 @@ export function decide(hand, p, persona, mood, rng, reads = {}) {
   const medium = 0.45;
 
   if (legal.canCheck) {
+    // "Too much checking." Some people can't stand a checked-around pot and bet at it no matter what they hold.
+    const checkedToMe = hand.active().filter((q) => q.id !== p.id).some((q) => q.lastAction === 'check');
+    if (persona.checkRaiser && checkedToMe && chance(persona.checkRaiser)) {
+      const r = raise(perceived > medium ? 'value' : 'bluff', 0.5);   // null only when it would mean his whole stack
+      if (r) return tag(r, 'too much checking');
+    }
     if (perceived > strong) {
       if (chance(0.55 + 0.45 * a)) return tag(raiseOr('value', () => ({ type: 'check' }), 0.45 + rng.next() * 0.3), 'value');
       return tag({ type: 'check' }, 'trap');
@@ -245,7 +265,7 @@ export function decide(hand, p, persona, mood, rng, reads = {}) {
   // "I have a pair": some people can't fold one, as long as the bet isn't for their whole stack
   if (persona.pairLover && !bigDecision && toCall <= p.stack * 0.25 && category(evaluate([...p.cards, ...hand.board])) >= 1 && chance(persona.pairLover)) return tag({ type: 'call' }, 'pair lover');
   // calling stations pay off bets they shouldn't, mostly when the price isn't terrible
-  const stationP = (1 - t) * (1 - skill) * 0.28 * (perceived > potOdds * 0.8 ? 1.4 : 0.5) + tilt * 0.12;
+  const stationP = ((1 - t) * (1 - skill) * 0.28 * (perceived > potOdds * 0.8 ? 1.4 : 0.5) + tilt * 0.12) * (persona.station || 1);  // persona.station: 1.8 = calls a lot more than she should
   if (!bigDecision && chance(stationP)) return tag({ type: 'call' }, 'station');
   if (!bigDecision && chance(bluff * 0.07 + tilt * 0.04)) return tag(raiseOr('bluff', () => ({ type: 'fold' })), 'bluff raise');
   return tag({ type: 'fold' }, 'fold');

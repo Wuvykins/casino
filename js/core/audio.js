@@ -4,7 +4,7 @@
 import { assets, probeAudio } from './assets.js';
 import { bank } from './bank.js';
 
-export const SFX = ['tap', 'chip', 'chips', 'deal', 'flip', 'check', 'fold', 'win', 'bigwin', 'lose', 'allin', 'tierup', 'tierdown', 'bailout', 'shuffle', 'yourturn'];
+export const SFX = ['tap', 'chip', 'chips', 'deal', 'flip', 'check', 'fold', 'win', 'bigwin', 'lose', 'allin', 'tierup', 'tierdown', 'bailout', 'shuffle', 'yourturn', 'dice'];
 
 let ctx = null;
 const fileSfx = new Map();
@@ -163,4 +163,5 @@ const synth = {
   bailout: (c) => [262, 247, 233, 220].forEach((f, i) => tone(c, { f, t: 0.25, at: i * 0.15, vol: 0.1, type: 'square' })),
   shuffle: (c) => { for (let i = 0; i < 8; i++) noise(c, { t: 0.03, vol: 0.06, hp: 2500, at: i * 0.04 }); },
   yourturn: (c) => synth.tap(c),
+  dice: (c) => { for (let i = 0; i < 6; i++) noise(c, { t: 0.04, vol: 0.12, hp: 1200, at: i * 0.06 + Math.random() * 0.02 }); },
 };

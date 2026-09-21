@@ -14,8 +14,8 @@ const GAMES = [
   { id: 'holdem', name: "Texas Hold'em", sub: 'Limit & No-Limit', open: true, icon: '♠' },
   { id: 'blackjack', name: 'Blackjack', sub: '6 decks · 3 to 2', open: true, icon: '21' },
   { id: 'slots', name: 'Slots', sub: 'Coming soon', open: false, icon: '7' },
-  { id: 'farkle', name: 'Farkle', sub: 'Coming soon', open: false, icon: '⚄' },
-  { id: 'cribbage', name: 'Cribbage', sub: 'Coming soon', open: false, icon: '15' },
+  { id: 'farkle', name: 'Farkle', sub: 'First to 10,000', open: true, icon: '⚄' },
+  { id: 'cribbage', name: 'Cribbage', sub: 'First to 121', open: true, icon: '15' },
 ];
 
 export function renderLobby(root, { onEnter }) {

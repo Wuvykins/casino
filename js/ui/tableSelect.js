@@ -42,7 +42,7 @@ export function renderTableSelect(root, opts) {
 async function chooseBuyIn(root, table, opts) {
   const s = bank.state;
   const maxOpp = opts.maxOpp ?? 5, minOpp = opts.minOpp ?? 0;
-  const step = table.bb || table.minBet || 1;
+  const step = table.bb || table.minBet || table.stake || 1;
   const max = Math.min(table.maxBuy, s.bank);
   const min = table.minBuy;
   let amount = Math.min(max, Math.max(min, Math.round(table.maxBuy / 2 / step) * step));

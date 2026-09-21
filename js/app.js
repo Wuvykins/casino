@@ -8,6 +8,10 @@ import { renderHoldemSelect } from './ui/holdemSelect.js';
 import { HoldemTable } from './ui/holdemTable.js';
 import { renderBlackjackSelect } from './ui/blackjackSelect.js';
 import { BlackjackTable } from './ui/blackjackTable.js';
+import { renderCribbageSelect } from './ui/cribbageSelect.js';
+import { CribbageTable } from './ui/cribbageTable.js';
+import { renderFarkleSelect } from './ui/farkleSelect.js';
+import { FarkleTable } from './ui/farkleTable.js';
 
 const root = $('#app');
 let current = null;
@@ -16,7 +20,7 @@ function goLobby() {
   current = null;
   music.play('lobby');
   music.duck(false);
-  renderLobby(root, { onEnter: (gameId) => { if (gameId === 'holdem') goHoldemSelect(); else if (gameId === 'blackjack') goBlackjackSelect(); } });
+  renderLobby(root, { onEnter: (gameId) => { if (gameId === 'holdem') goHoldemSelect(); else if (gameId === 'blackjack') goBlackjackSelect(); else if (gameId === 'cribbage') goCribbageSelect(); else if (gameId === 'farkle') goFarkleSelect(); } });
 }
 function goHoldemSelect() {
   music.duck(true); // keeps playing, much quieter, all the way through the game
@@ -35,6 +39,28 @@ function goBlackjackSelect() {
     onBack: goLobby,
     onSit: (table, buyIn, companions) => {
       current = new BlackjackTable(root, table, buyIn, companions, { onLeave: goLobby });
+      current.run().catch((err) => { console.error(err); goLobby(); });
+    },
+  });
+}
+
+function goCribbageSelect() {
+  music.duck(true);
+  renderCribbageSelect(root, {
+    onBack: goLobby,
+    onSit: (table, buyIn, opponents) => {
+      current = new CribbageTable(root, table, buyIn, opponents, { onLeave: goLobby });
+      current.run().catch((err) => { console.error(err); goLobby(); });
+    },
+  });
+}
+
+function goFarkleSelect() {
+  music.duck(true);
+  renderFarkleSelect(root, {
+    onBack: goLobby,
+    onSit: (table, buyIn, opponents) => {
+      current = new FarkleTable(root, table, buyIn, opponents, { onLeave: goLobby });
       current.run().catch((err) => { console.error(err); goLobby(); });
     },
   });

@@ -25,12 +25,20 @@ export const ASSET_FILES = {
   // Table
   'table.felt.holdem':  'img/table/felt-holdem',    // table background, landscape (~2048x1024)
   'table.felt.blackjack': 'img/table/felt-blackjack', // blackjack table background (falls back to the hold'em felt)
+  'table.felt.cribbage': 'img/table/felt-cribbage',   // cribbage table background (falls back to the hold'em felt)
+  'table.felt.farkle':   'img/table/felt-farkle',     // farkle table: the whole scene incl. the room behind (2:1, ~1774x887)
+  'farkle.cup':          'img/farkle/cup',            // the leather dice cup (transparent png)
   'table.dealer':       'img/table/dealer-button',  // dealer button (~128x128)
+  'table.crib.board':   'img/table/cribbage-board',   // the cribbage board, wide strip (~2138x275); hole positions are in cribbageTable.js
+  'table.crib.peg.you': 'img/table/cribbage-peg-gold', // your pegs (~128x128, transparent)
+  'table.crib.peg.opp': 'img/table/cribbage-peg-red',  // their pegs
   // Playing cards (~250x350). Faces are optional; the back is the one you'll notice most.
   'deck.back': 'img/cards/back',
   'deck.back2': 'img/cards/back-2',                 // optional second back; the table picks one at random when you sit
 };
 for (const s of SUITS) for (const r of Object.values(RANK_CHAR)) ASSET_FILES[`deck.${r}${s.toUpperCase()}`] = `img/cards/${r}${s.toUpperCase()}`;
+// Dice faces (~256x256, transparent) — optional, drawn by the game otherwise
+for (const d of [1, 2, 3, 4, 5, 6]) ASSET_FILES[`dice.${d}`] = `img/dice/${d}`;
 // Chips (~256x256, transparent background)
 for (const d of [1, 5, 25, 100, 500, 1000, 5000]) ASSET_FILES[`chip.${d}`] = `img/chips/${d}`;
 // Portraits (~512x512). Optional extra expressions: <id>-happy, <id>-mad
@@ -87,7 +95,8 @@ export const assets = {
   isOptional(key) {
     if (/^deck\.(?!back$)/.test(key)) return true;               // card faces and the second back
     if (/^portrait\..+\.(happy|mad)$/.test(key)) return true;    // extra expressions
-    if (key === 'table.felt.blackjack' || key === 'lobby.cashier') return true;
+    if (key === 'table.felt.blackjack' || key === 'table.felt.cribbage' || key === 'table.felt.farkle' || key === 'lobby.cashier') return true;
+    if (/^dice\./.test(key)) return true;
     if (key.startsWith('lobby.door.') && this.has('lobby.floor')) return true; // doors are hidden once there's floor art
     return false;
   },

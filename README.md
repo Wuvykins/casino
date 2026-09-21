@@ -2,8 +2,8 @@
 
 A private, Hoyle-Casino-style casino for the phone. Vanilla HTML/JS, no build step, one save on the device.
 
-**Live now:** lobby, bank and five credit-card tiers, Ken's bailout, Texas Hold'em (limit and no-limit) with personality-driven opponents, and Blackjack (6 decks, dealer stands on 17, 3:2, double any two, double after split, split to 4 hands, insurance) with up to two of the family playing beside you.
-**Coming:** Slots, Farkle, Cribbage (their doors are in the lobby already).
+**Live now:** lobby, bank and five credit-card tiers, Ken's bailout, Texas Hold'em (limit and no-limit) with personality-driven opponents, Blackjack (6 decks, dealer stands on 17, 3:2, double any two, double after split, split to 4 hands, insurance) with up to two of the family playing beside you, two-handed Cribbage (first to 121, a stake per game, skunks pay double and triple), and Farkle (first to 10,000, up to three opponents).
+**Coming:** Slots.
 
 ## Put it on your phone (the real thing)
 
@@ -31,7 +31,7 @@ It prints two addresses. Open the phone one in Safari on your iPhone/iPad (same 
 ## How the money works
 
 - Your money lives in the **bank**. Sitting at a table buys chips out of the bank; leaving cashes them back in.
-- Your **card** is re-evaluated every time you cash out (or get bailed out): Basic → Silver ($5,000) → Gold ($25,000) → Black ($100,000). Higher cards unlock higher tables. Lose it back and the card downgrades.
+- Your **card** is re-evaluated every time you cash out (or get bailed out): Basic → Silver ($2,500) → Gold ($5,000) → Platinum ($25,000) → Sovereign ($100,000). Higher cards unlock higher tables. Lose it back and the card downgrades.
 - Bust at a table → rebuy from the bank or go to the lobby. Bank too low to play → the **Ask Ken** button appears by the bank statement. Ken gives you the starting $1,000 back and says what he says. (His lines are in `js/content/characters.js` under `BANKER`.)
 - Reload mid-session and your chips go back to the bank automatically.
 
@@ -50,6 +50,11 @@ Every piece of art has a fixed file name under `assets/`. Drop a PNG or JPG in w
 | Credit cards (5) | `assets/img/cards/credit-1.png` … `credit-5.png` | 860×540 | Basic, Silver, Gold, Platinum, Sovereign. Corners are rounded by the game |
 | Poker table felt | `assets/img/table/felt-holdem.png` | 2048×1024 | the whole table area incl. rail; seats sit around the edge, board dead centre |
 | Blackjack table felt | `assets/img/table/felt-blackjack.png` | 2048×1024 | dealer's cards top centre, your cards centre, friends at 16% and 84% across; falls back to the poker felt |
+| Cribbage board | `assets/img/table/cribbage-board.png` | 2138×275 | Nic's board (in place). Two lanes × two rows of 60 holes (one hole per point); hole positions are listed in `BOARD_ART` in `js/ui/cribbageTable.js`. Pegs: `cribbage-peg-gold.png` (yours), `cribbage-peg-red.png` (theirs), 128×128 transparent |
+| Dice (6) | `assets/img/dice/1.png` … `6.png` | 256×256 | optional; drawn by the game otherwise |
+| Farkle scene | `assets/img/table/felt-farkle.jpg` | 1774×887 (2:1) | in place — the whole screen incl. the room; the rail interior is where the dice land |
+| Dice cup | `assets/img/farkle/cup.png` | ~660×700, transparent | in place — shaken and tipped before every roll |
+| Cribbage table felt | `assets/img/table/felt-cribbage.png` | 2048×1024 | the board is drawn across the top, opponent at left, deck and crib at right, your cards along the bottom; falls back to the poker felt |
 | Dealer button | `assets/img/table/dealer-button.png` | 128×128 | |
 | Card back | `assets/img/cards/back.png` | 250×350 | |
 | Card faces (optional) | `assets/img/cards/AS.png`, `TD.png`, `2C.png` … | 250×350 | rank `2-9 T J Q K A` + suit `S H D C`. Any you don't supply stay drawn by the game |
@@ -68,12 +73,13 @@ Every piece of art has a fixed file name under `assets/`. Drop a PNG or JPG in w
 | `aggro` | checks and calls | bets and raises |
 | `bluff` | never bluffs | bluffs constantly |
 | `tilt` | ice | loses a big pot and starts spewing |
+| `chatty` | 0.5 = rarely speaks | 2 = talks twice as often (Freddy is 1.8) — every line still shows its text bubble even when a recording plays |
 
 Then `lines`: banter per trigger, each entry either plain text or `{ text, file }` when there's a recording for it (generic lines from `js/content/lines.js` fill any gaps).
 
 ## Voice lines
 
-Files go in `assets/voice/<id>/`, and each line in `characters.js` names its own file, e.g. `fold: [{ text: "Not with that.", file: "fold_1.m4a" }, "Nope."]`. iPhone voice memos export as .m4a, which is exactly right. When a recording plays, the text bubble still shows.
+Files go in `assets/voice/<id>/`, and each line in `characters.js` names its own file, e.g. `fold: [{ text: "Not with that.", file: "02-fold.mp3" }, "Nope."]`. Record in anything (iPhone voice memos are .m4a); clips are converted to mp3 for the game so they play on every host. When a recording plays, the text bubble still shows.
 
 Triggers, roughly in order of how often you'll hear them:
 
@@ -94,6 +100,10 @@ Triggers, roughly in order of how often you'll hear them:
 | `blackjack` | they're dealt a natural | 2 |
 | `push` | they tie the dealer | 1 |
 | `dealerBust` | the dealer busts | 2 |
+| `cribGo` / `cribPeg` / `cribThirtyOne` | cribbage pegging | 2 each |
+| `cribGoodHand` / `cribBadHand` / `cribGoodCrib` / `cribBadCrib` | counting a hand or crib | 2 each |
+| `cribHeels` / `cribGameWin` / `cribGameLose` / `cribSkunked` / `cribGotSkunked` | cribbage moments | 1–2 each |
+| `fkRoll` / `fkFarkle` / `fkHotDice` / `fkBank` / `fkBankBig` / `fkPush` / `tauntFarkle` | farkle | 2 each |
 | `hurry` | you've taken more than 14 s to act | 3 |
 | `greet` | when you sit down | 2 |
 | `bustOut` | they lose their whole stack | 2 |

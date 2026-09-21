@@ -22,7 +22,27 @@ export const BLACKJACK_TABLES = [
   { id: 'bj-1000', game: 'blackjack', name: 'High Roller $1,000–$50,000', minBet: 1000, maxBet: 50000, minBuy: 20000, maxBuy: 200000, tier: 5 },
 ];
 
+// Cribbage: a stake per game. A skunk (loser under 91) pays double, a double skunk (under 61) triple.
+// You buy in with enough to cover a few games; whatever's left comes back to the bank when you leave.
+export const CRIBBAGE_TABLES = [
+  { id: 'crib-10',   game: 'cribbage', name: 'Cribbage $10 a game',    stake: 10,   minBuy: 30,    maxBuy: 200,    tier: 1 },
+  { id: 'crib-50',   game: 'cribbage', name: 'Cribbage $50 a game',    stake: 50,   minBuy: 150,   maxBuy: 1000,   tier: 2 },
+  { id: 'crib-250',  game: 'cribbage', name: 'Cribbage $250 a game',   stake: 250,  minBuy: 750,   maxBuy: 5000,   tier: 3 },
+  { id: 'crib-1000', game: 'cribbage', name: 'Cribbage $1,000 a game', stake: 1000, minBuy: 3000,  maxBuy: 20000,  tier: 4 },
+  { id: 'crib-5000', game: 'cribbage', name: 'Cribbage $5,000 a game', stake: 5000, minBuy: 15000, maxBuy: 100000, tier: 5 },
+];
+
+// Farkle: everybody puts up the stake, the winner takes the pot. First to 10,000.
+export const FARKLE_TABLES = [
+  { id: 'fk-10',   game: 'farkle', name: 'Farkle $10 a game',    stake: 10,   minBuy: 30,    maxBuy: 200,    tier: 1 },
+  { id: 'fk-50',   game: 'farkle', name: 'Farkle $50 a game',    stake: 50,   minBuy: 150,   maxBuy: 1000,   tier: 2 },
+  { id: 'fk-250',  game: 'farkle', name: 'Farkle $250 a game',   stake: 250,  minBuy: 750,   maxBuy: 5000,   tier: 3 },
+  { id: 'fk-1000', game: 'farkle', name: 'Farkle $1,000 a game', stake: 1000, minBuy: 3000,  maxBuy: 20000,  tier: 4 },
+  { id: 'fk-5000', game: 'farkle', name: 'Farkle $5,000 a game', stake: 5000, minBuy: 15000, maxBuy: 100000, tier: 5 },
+];
+
 export const MAX_SEATS = 6; // you + up to 5 opponents
 
-export function cheapestBuyIn() { return Math.min(...HOLDEM_TABLES.map((t) => t.minBuy), ...BLACKJACK_TABLES.map((t) => t.minBuy)); }
-export function tableById(id) { return HOLDEM_TABLES.find((t) => t.id === id); }
+const ALL = () => [...HOLDEM_TABLES, ...BLACKJACK_TABLES, ...CRIBBAGE_TABLES, ...FARKLE_TABLES];
+export function cheapestBuyIn() { return Math.min(...ALL().map((t) => t.minBuy)); }
+export function tableById(id) { return ALL().find((t) => t.id === id); }

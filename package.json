@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "python3 serve.py",
-    "test": "node tests/engine.test.mjs && node tests/blackjack.test.mjs && node tests/ai.sim.mjs nolimit 2000 && node tests/ai.sim.mjs limit 2000",
-    "test:ui": "node tests/ui.smoke.mjs 6 && node tests/bj.smoke.mjs 8"
+    "test": "node tests/engine.test.mjs && node tests/blackjack.test.mjs && node tests/cribbage.test.mjs && node tests/farkle.test.mjs && node tests/ai.sim.mjs nolimit 2000 && node tests/ai.sim.mjs limit 2000",
+    "test:ui": "node tests/ui.smoke.mjs 6 && node tests/bj.smoke.mjs 8 && node tests/crib.smoke.mjs 1 && node tests/fk.smoke.mjs 1"
   },
   "devDependencies": {
     "playwright": "^1.50.0"

@@ -19,19 +19,25 @@ Nic designs all the art, voice lines and music himself and sends them in chat; t
   Playwright launches `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` in the cloud box; adjust if elsewhere.
 
 ## Status
-Done: lobby (floor art with tap hotspots), bank + 5 credit-card tiers (Basic → Silver $5k → Gold $25k → Platinum $100k → Sovereign $500k),
+Done: lobby (floor art with tap hotspots), bank + 5 credit-card tiers (Basic → Silver $2.5k → Gold $5k → Platinum $25k → Sovereign $100k),
 Ken's bailout ($1,000; friendly Ken photo first time, angry Ken after), Texas Hold'em (limit + no-limit, 5 tiers of tables),
-Blackjack (6 decks, S17, 3:2, DAS, split to 4, split aces one card, insurance; 0–2 companions).
-Next, in Nic's order: **Slots**, then **Farkle**, then **Cribbage**. Lobby doors for them exist but are closed (`GAMES` in js/ui/lobby.js).
+Blackjack (6 decks, S17, 3:2, DAS, split to 4, split aces one card, insurance; 0–2 companions),
+Cribbage (two-handed, first to 121, stake per game, skunk ×2 / double skunk ×3, loser deals next; hands counted out loud with the cards lit up).
+Farkle (6 dice, 1=100/5=50/three-of-a-kind, 4/5/6 of a kind = 1000/2000/3000, straight & three pairs 1500, two triplets 2500, 500 to get on the board, first to 10,000 with a final round; 1–3 opponents; ability = persona.farkleSkill ?? cribSkill; Nic's dice.mp3 on every roll). Farkle look comes from Nic's mockup: the cleaned mockup is the full-screen background (assets/img/table/felt-farkle.jpg, stretched 100%/100%), serif gold UI, dice cup (assets/img/farkle/cup.png) shakes then tips, dice scatter with random tilt inside ZONE in farkleTable.js.
+Next: **Slots** (the last game). Lobby doors for them exist but are closed (`GAMES` in js/ui/lobby.js).
 
 ## Rules Nic set (don't break these)
 - Accessibility for his 65-year-old dad: big cards, big cutout portraits (no circles), big chips with numbers, big result tags and hand names, big bank card.
 - Don't deal the next hand until the player presses Deal. Fun win screen with a chip stack; BIG WIN = net gain ≥ 25 BB (hold'em) or blackjack / ≥ 8× min bet (blackjack).
 - Character picker: real people first by default; real people show name only (bots keep taglines). Bots: marty, dot, rico, vee.
 - Cast personalities: Nic = best, tight, only calls with a good hand. Freddy = aggressive, bluffs, shoves. Kurtis = terrible, calls with nothing, never aggressive.
-  Nathaniel = conservative, never bluffs, calls with any pair "within reason". Mom = between Nathaniel and Freddy, jolly, says "Damnit." on a big loss / bad beat. Ken = banker.
+  Nathaniel = conservative, never bluffs, calls with any pair "within reason". Mom = between Nathaniel and Freddy, jolly, says "Damnit." on a big loss / bad beat. Courtney = skill 4/10, calls too much (persona.station 1.6); first character with a full recorded voice set (assets/voice/courtney/*.mp3). Ken = banker.
+- Hold'em feel (Nic, 2026-09-20): a family game, not a card room. ai.js has FAMILY_SKILL 0.8 (everyone plays below their dial) and LIMP_URGE 0.2 (+ (1-tight)*0.4): when nobody has raised, most people call the blind to see a flop (Nic ~40% VPIP). Freddy has persona.checkRaiser 1: whenever it checks to him postflop he bets, with the `tooMuchChecking` line.
+- Cribbage ability is a separate dial, persona.cribSkill: Mom .85 (the family shark), Nic .45, Nathaniel .45, Freddy .2, Courtney .2, Kurtis .12; bots use their poker skill.
 - Ken's line is exactly "Ken gave you {amount}, go have fun." — no "Damn it", no "Bank Manager" label.
-- Voice lines are `{ text, file }` pairs per line; recorded lines are preferred when present. Files: `assets/voice/<id>/<file>`.
+- Voice lines are `{ text, file }` pairs per line; recorded lines are preferred when present. The text bubble ALWAYS shows, even with a recording (Nic's rule).
+- Persona `chatty` (default 1) scales how often a character talks; `taunt` trigger = trash talk when you fold to them / bust / count nothing. Freddy is the trash-talker (chatty 1.8).
+- Recording plan: one folder per person, files `NN-trigger.m4a` per the list in voice-file-names.md; Nic edits the wording and sends the list with the audio. Clips are cut/normalised with ffmpeg (loudnorm I=-16) and saved as MP3 — the artifact host does not serve .m4a. If one long recording comes in, split it by silence (energy envelope, gap >= 0.4 s) and match segments to the list in order. Files: `assets/voice/<id>/<file>`.
 - Sounds: deal.mp3 per card, check = two taps (his recording), call = clean high tone, turn change/fold = menu tap, loss = his negative.mp3 pitched down.
 - Music: his dad's songs (assets/music/song-N.mp3), "distant speaker" muffle, shuffled, lobby 0.7, ducked to 0.45 at tables, gear button bottom-right toggles it.
 - ffmpeg gotcha: put `-ss` BEFORE `-i` when trimming mp3s or you get silence.
