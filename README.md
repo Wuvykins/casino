@@ -48,7 +48,7 @@ Every piece of art has a fixed file name under `assets/`. Drop a PNG or JPG in w
 | Cashier window | `assets/img/lobby/cashier.png` | 600×400 | not shown yet — reserved for the bank screen |
 | Ken | `assets/img/portraits/ken.png` | 512×512 | shown in the bailout scene |
 | Credit cards (5) | `assets/img/cards/credit-1.png` … `credit-5.png` | 860×540 | Basic, Silver, Gold, Platinum, Sovereign. Corners are rounded by the game |
-| Poker table felt | `assets/img/table/felt-holdem.png` | 2048×1024 | the whole table area incl. rail; seats sit around the edge, board dead centre |
+| Poker table | `assets/img/table/felt-holdem.png` | 1774×887 (2:1), transparent outside the rail | in place — Nic's oval table, drawn at ~75% of the play area with the seats around it |
 | Blackjack table felt | `assets/img/table/felt-blackjack.png` | 2048×1024 | dealer's cards top centre, your cards centre, friends at 16% and 84% across; falls back to the poker felt |
 | Cribbage board | `assets/img/table/cribbage-board.png` | 2138×275 | Nic's board (in place). Two lanes × two rows of 60 holes (one hole per point); hole positions are listed in `BOARD_ART` in `js/ui/cribbageTable.js`. Pegs: `cribbage-peg-gold.png` (yours), `cribbage-peg-red.png` (theirs), 128×128 transparent |
 | Dice (6) | `assets/img/dice/1.png` … `6.png` | 256×256 | optional; drawn by the game otherwise |
@@ -116,7 +116,7 @@ Ken has `bailout` and `bailoutAgain`, in `assets/voice/ken/`.
 
 ## Sound effects
 
-Synthesised placeholders play until you drop files in `assets/sfx/<name>.mp3` (or .m4a/.wav): `tap chip chips deal flip check fold win bigwin lose allin tierup tierdown bailout shuffle yourturn`.
+Synthesised placeholders play until you drop files in `assets/sfx/<name>.mp3` (or .m4a/.wav): `tap chip chips deal flip check call raise fold win bigwin lose allin tierup tierdown bailout shuffle yourturn dice`. Nic's recordings so far: deal, check, call (ante up), raise, allin, lose, dice.
 
 ## Tests
 

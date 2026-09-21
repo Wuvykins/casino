@@ -47,11 +47,11 @@ label.check { display: flex; gap: 10px; align-items: center; padding: 6px 0; }
 details { margin: 8px 0; } summary { cursor: pointer; color: var(--muted); }
 
 /* ============ splash / rotate / toast ============ */
-#splash { position: absolute; inset: 0; display: grid; place-content: center; gap: 14px; background: var(--bg); z-index: 50; text-align: center; }
-#splash .logo { font-size: 32px; font-weight: 800; color: var(--gold); }
-#splash .bar { width: 220px; height: 6px; background: rgba(255,255,255,.1); border-radius: 3px; overflow: hidden; }
-#splash .fill { height: 100%; width: 0; background: var(--gold); transition: width .2s; }
-#splash .hint { color: var(--muted); font-size: 13px; }
+#splash { position: absolute; inset: 0; background: #0b3d22 url(../assets/img/splash.jpg) center/cover no-repeat; z-index: 50; overflow: hidden; transition: opacity .5s; }
+#splash.out { opacity: 0; pointer-events: none; }
+#splash video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+#splash .skip { position: absolute; right: calc(16px + var(--safe-r)); bottom: calc(12px + var(--safe-b)); color: rgba(255,255,255,.55); font-size: 13px; letter-spacing: .04em; opacity: 0; transition: opacity .6s; }
+#splash.can-skip .skip { opacity: 1; }
 #rotate { display: none; position: absolute; inset: 0; z-index: 60; background: var(--bg); place-content: center; text-align: center; font-size: 22px; line-height: 1.5; }
 body.portrait #rotate { display: grid; }
 .toast { position: absolute; left: 50%; bottom: calc(18px + var(--safe-b)); transform: translate(-50%, 20px); background: var(--panel); border: 1px solid rgba(255,255,255,.15); padding: 10px 16px; border-radius: 12px; opacity: 0; transition: all .25s; z-index: 70; pointer-events: none; }
@@ -190,6 +190,9 @@ body.portrait #rotate { display: grid; }
 .felt { position: relative; flex: 1; margin: 0 calc(6px + var(--safe-r)) 0 calc(6px + var(--safe-l)); background-size: cover; background-position: center; }
 .rail { position: absolute; left: 16%; right: 16%; top: 17%; bottom: 15%; border-radius: 50% / 50%; background: radial-gradient(ellipse at 50% 40%, #2a8a52 0%, var(--felt) 55%, var(--felt-dark) 100%); box-shadow: 0 0 0 clamp(6px, 1.4vh, 12px) var(--rail), 0 0 0 calc(clamp(6px, 1.4vh, 12px) + 2px) #2a170b, inset 0 0 40px rgba(0,0,0,.45); }
 .felt.has-art .rail { display: none; }
+.felt.has-art { background-size: 100% 100%; background-repeat: no-repeat; } /* painted tables stretch to the play area so the whole oval always shows */
+/* hold'em: the table cutout sits where the drawn rail used to be, so the seats stay around it on the dark floor */
+.holdem .felt.has-art { background-size: 75% 73.3%; background-position: 50% 54%; }
 .board { position: absolute; left: 50%; top: 47%; transform: translate(-50%, -50%); display: flex; gap: calc(var(--card-w) * .1); z-index: 2; }
 .under-board { position: absolute; left: 55%; top: 47%; max-width: 43vw; transform: translate(0, calc(var(--card-h) * .5 + 6px)); display: flex; align-items: center; gap: 10px; z-index: 2; white-space: nowrap; }
 .pot { display: flex; align-items: center; gap: 6px; }

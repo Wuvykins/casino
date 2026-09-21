@@ -66,14 +66,40 @@ function goFarkleSelect() {
   });
 }
 
+// Startup: Nic's intro video plays while the save, art and sounds load (about a second). The logo forms at normal
+// speed; once loading is done the rest of the video runs faster, so the whole thing takes ~8 s instead of 12.
+// A tap skips the video (and, since a tap is a gesture, unmutes it for whatever is left).
+const INTRO_LOGO_AT = 5.2;   // seconds into the video when the logo has formed
+const INTRO_FAST = 2.2;      // once loading is done, the rest of the video (the progress bar) runs this much faster
+function playIntro(splash) {
+  const video = splash?.querySelector('video');
+  if (!video) return { done: Promise.resolve(), loaded() {} };
+  let loadedFlag = false;
+  const hurry = () => { if (loadedFlag && video.currentTime >= INTRO_LOGO_AT) video.playbackRate = INTRO_FAST; };
+  video.addEventListener('timeupdate', hurry);
+  const done = new Promise((resolve) => {
+    let done = false;
+    const finish = () => { if (!done) { done = true; resolve(); } };
+    video.addEventListener('ended', finish);
+    video.addEventListener('error', finish);
+    video.play().catch(finish);                       // can't autoplay here? go straight in
+    setTimeout(() => splash.classList.add('can-skip'), 2500);
+    setTimeout(finish, 15000);                        // never hold the door longer than this
+    splash.addEventListener('pointerdown', () => { if (splash.classList.contains('can-skip')) finish(); else { video.muted = false; } });
+  });
+  return { done, loaded() { loadedFlag = true; hurry(); } };
+}
+
 async function boot() {
   const splash = $('#splash');
-  const bar = $('#splash .fill');
+  const intro = playIntro(splash);
   bank.load();
-  await assets.init((p) => { if (bar) bar.style.width = (p * 100).toFixed(0) + '%'; });
+  await assets.init();
   await audio.init();
   await music.init();
-  splash?.remove();
+  intro.loaded();          // the real loading is done; let the video's bar hurry to the end
+  await intro.done;
+  if (splash) { splash.classList.add('out'); setTimeout(() => splash.remove(), 600); }
   if (!bank.state.playerName) await askName();
   goLobby();
 }

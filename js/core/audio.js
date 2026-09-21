@@ -4,7 +4,7 @@
 import { assets, probeAudio } from './assets.js';
 import { bank } from './bank.js';
 
-export const SFX = ['tap', 'chip', 'chips', 'deal', 'flip', 'check', 'fold', 'win', 'bigwin', 'lose', 'allin', 'tierup', 'tierdown', 'bailout', 'shuffle', 'yourturn', 'dice'];
+export const SFX = ['tap', 'chip', 'chips', 'deal', 'flip', 'check', 'call', 'raise', 'fold', 'win', 'bigwin', 'lose', 'allin', 'tierup', 'tierdown', 'bailout', 'shuffle', 'yourturn', 'dice'];
 
 let ctx = null;
 const fileSfx = new Map();
@@ -20,11 +20,7 @@ export const audio = {
         if (await probeAudio(url)) fileSfx.set(k, url);
       }));
     }
-    const unlock = () => {
-      if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
-      if (ctx.state === 'suspended') ctx.resume();
-      unlocked = true;
-    };
+    const unlock = () => { ctxNow(); unlocked = true; };
     for (const ev of ['touchstart', 'touchend', 'mousedown', 'keydown']) document.addEventListener(ev, unlock, { once: false, passive: true });
   },
   get enabled() { return bank.state?.settings?.sound !== false; },
@@ -50,23 +46,54 @@ export const audio = {
   },
 };
 
-// ---------- background music ----------
-// Files live in assets/music/<key>.mp3 (e.g. lobby.mp3). Loops, fades in/out, honours the music setting.
-// iOS won't start audio until the first tap, so a play() before that is retried on the next gesture.
+// ---------- background music + lobby room sound ----------
+// Songs live in assets/music/song-N.mp3 (shuffled, no repeats back to back). The lobby also has a room-sound loop,
+// assets/music/lobby-room.mp3 (crowd, chips, murmur), that only plays on the casino floor.
+// Everything runs through WebAudio: element -> lowpass -> gain -> speakers. That gives us real volume control on
+// iPhone (Safari ignores element.volume) and a muffle we can turn up at the tables, like walking away from the speaker.
 const musicFiles = new Map();
-let musicEl = null, musicKey = null, fadeTimer = null, duckLevel = 1;
-const DUCK = 0.45; // how loud the music is while you're at a table, relative to the lobby
-function fadeTo(target, ms, done) {
-  clearInterval(fadeTimer);
-  if (!musicEl) return done?.();
-  const start = musicEl.volume, steps = Math.max(1, Math.round(ms / 50));
-  let i = 0;
-  fadeTimer = setInterval(() => {
-    i++; musicEl.volume = Math.max(0, Math.min(1, start + (target - start) * (i / steps)));
-    if (i >= steps) { clearInterval(fadeTimer); done?.(); }
-  }, 50);
+const DUCK = 0.4;          // music level at a table, relative to the lobby
+const TABLE_MUFFLE = 1400; // lowpass cutoff (Hz) at a table; 20000 = wide open in the lobby
+const ROOM_LEVEL = 0.4;    // room sound relative to the music volume setting
+const SONG_GAP = 3000;     // ms of quiet between songs
+let playlist = [], queue = [], lastTrack = null;
+let track = null;          // { el, gain, filter }
+let room = null;           // { el, gain }
+let ducked = false;
+
+function ctxNow() {
+  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  return ctx;
 }
-let playlist = [], queue = [];
+// element -> (lowpass) -> gain -> out. Falls back to plain element volume if the graph can't be built.
+function wire(el, { filtered = false } = {}) {
+  const c = ctxNow();
+  const gain = c.createGain(); gain.gain.value = 0;
+  let filter = null;
+  try {
+    const src = c.createMediaElementSource(el);
+    if (filtered) { filter = c.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 20000; filter.Q.value = 0.6; src.connect(filter).connect(gain); }
+    else src.connect(gain);
+    gain.connect(c.destination);
+    el.volume = 1;
+    return { el, gain, filter, graph: true };
+  } catch { el.volume = 0; return { el, gain: null, filter: null, graph: false }; }
+}
+function rampGain(node, target, ms) {
+  if (!node) return;
+  if (node.gain) { const c = ctxNow(); node.gain.gain.cancelScheduledValues(c.currentTime); node.gain.gain.setValueAtTime(node.gain.gain.value, c.currentTime); node.gain.gain.linearRampToValueAtTime(target, c.currentTime + ms / 1000); }
+  else { const el = node.el, start = el.volume, steps = Math.max(1, Math.round(ms / 50)); let i = 0; const t = setInterval(() => { i++; el.volume = Math.max(0, Math.min(1, start + (target - start) * (i / steps))); if (i >= steps) clearInterval(t); }, 50); }
+}
+function rampFilter(node, hz, ms) {
+  if (!node?.filter) return;
+  const c = ctxNow(); node.filter.frequency.cancelScheduledValues(c.currentTime); node.filter.frequency.setValueAtTime(node.filter.frequency.value, c.currentTime); node.filter.frequency.exponentialRampToValueAtTime(hz, c.currentTime + ms / 1000);
+}
+function stopNode(node, ms) {
+  if (!node) return;
+  rampGain(node, 0, ms);
+  setTimeout(() => { try { node.el.pause(); node.el.removeAttribute('src'); node.el.load(); } catch { /* ignore */ } }, ms + 60);
+}
 function nextTrack() {
   if (!playlist.length) return null;
   if (!queue.length) {                      // reshuffle; don't repeat the song that just ended
@@ -76,7 +103,8 @@ function nextTrack() {
   }
   return queue.shift();
 }
-let lastTrack = null;
+const musicLevel = () => audio.musicVolume * (ducked ? DUCK : 1);
+const roomLevel = () => audio.musicVolume * ROOM_LEVEL;
 export const music = {
   async init() {
     // playlist: assets/music/song-1.mp3, song-2.mp3, ... (stops at the first missing number)
@@ -87,40 +115,61 @@ export const music = {
       playlist.push(found);
     }
     if (playlist.length) musicFiles.set('lobby', playlist[0]);
-    const retry = () => { if (musicKey && musicEl && musicEl.paused && audio.musicEnabled) musicEl.play().catch(() => {}); };
+    const roomUrl = assets.fileUrl('music/lobby-room.mp3');
+    if (await probeAudio(roomUrl)) musicFiles.set('room', roomUrl);
+    // iOS won't start audio until the first tap: retry anything that's meant to be playing on the next gesture
+    const retry = () => { ctxNow(); if (track && track.el.paused && audio.musicEnabled) track.el.play().catch(() => {}); if (room && room.el.paused && this.roomWanted) room.el.play().catch(() => {}); };
     for (const ev of ['touchend', 'mousedown', 'keydown']) document.addEventListener(ev, retry, { passive: true });
   },
+  get roomEnabled() { return bank.state?.settings?.roomSound !== false; },
+  get roomWanted() { return !ducked && this.roomEnabled && audio.musicEnabled && musicFiles.has('room'); },
   has(key) { return musicFiles.has(key); },
+  debug() { return { track: track ? (track.el.paused ? 'paused' : 'playing') + (track.filter ? ` lp ${Math.round(track.filter.frequency.value)}` : '') + ` gain ${track.gain?.gain.value.toFixed(2)}` : null, room: room ? (room.el.paused ? 'paused' : 'playing') + ` gain ${room.gain?.gain.value.toFixed(2)}` : null, ducked }; },
+  key: null,
   play(key) {
-    if (musicKey === key && musicEl && !musicEl.paused) return;
+    if (this.key === key && track && !track.el.paused) return;
     this.stop(300);
-    musicKey = key;
+    this.key = key;
     if (!playlist.length || !audio.musicEnabled) return;
     const url = nextTrack(); lastTrack = url;
-    const el = new Audio(url); el.volume = 0; el.preload = 'auto';
-    el.addEventListener('ended', () => { if (musicEl === el) { musicEl = null; const k = musicKey; musicKey = null; this.play(k); } });
-    musicEl = el;
+    const el = new Audio(url); el.preload = 'auto';
+    const node = wire(el, { filtered: true });
+    if (node.filter) node.filter.frequency.value = ducked ? TABLE_MUFFLE : 20000;
+    el.addEventListener('ended', () => { if (track !== node) return; track = null; const k = this.key; this.key = null; setTimeout(() => { if (!track && !this.key) this.play(k); }, SONG_GAP); }); // a little quiet between songs
+    track = node;
     el.play().catch(() => {}); // may be refused before the first tap; the gesture listener retries
-    fadeTo(audio.musicVolume * duckLevel, 1200);
+    rampGain(node, musicLevel(), 1200);
+    this.room();
   },
-  // Quieter while a game is being played (like walking away from the speaker), back up in the lobby.
+  // Quieter and muffled while a game is being played (like walking away from the speaker); the room sound stays in the lobby.
   duck(on) {
-    duckLevel = on ? DUCK : 1;
-    if (musicEl) fadeTo(audio.musicVolume * duckLevel, 900);
+    ducked = on;
+    if (track) { rampGain(track, musicLevel(), 900); rampFilter(track, on ? TABLE_MUFFLE : 20000, 900); }
+    this.room();
+  },
+  // start or stop the lobby room-sound loop to match where we are and what's switched on
+  room() {
+    const want = this.roomWanted;
+    if (want && !room) {
+      const el = new Audio(musicFiles.get('room')); el.loop = true; el.preload = 'auto';
+      room = wire(el);
+      el.play().catch(() => {});
+      rampGain(room, roomLevel(), 1500);
+    } else if (!want && room) { const r = room; room = null; stopNode(r, 700); }
+    else if (room) rampGain(room, roomLevel(), 300);
   },
   stop(ms = 600) {
-    musicKey = null;
-    const el = musicEl; if (!el) return;
-    musicEl = null;
-    clearInterval(fadeTimer);
-    const start = el.volume, steps = Math.max(1, Math.round(ms / 50)); let i = 0;
-    const t = setInterval(() => { i++; el.volume = Math.max(0, start * (1 - i / steps)); if (i >= steps) { clearInterval(t); el.pause(); el.removeAttribute('src'); } }, 50);
+    this.key = null;
+    const t = track; if (!t) return;
+    track = null;
+    stopNode(t, ms);
   },
   // settings changed: apply immediately
   refresh() {
-    if (!audio.musicEnabled) { const k = musicKey; this.stop(300); musicKey = k; return; }
-    if (musicKey && !musicEl) { const k = musicKey; musicKey = null; this.play(k); }
-    else if (musicEl) musicEl.volume = audio.musicVolume * duckLevel;
+    if (!audio.musicEnabled) { const k = this.key; this.stop(300); this.key = k; }
+    else if (this.key && !track) { const k = this.key; this.key = null; this.play(k); }
+    else if (track) rampGain(track, musicLevel(), 200);
+    this.room();
   },
 };
 
@@ -153,6 +202,8 @@ const synth = {
   deal: (c) => noise(c, { t: 0.07, vol: 0.12, hp: 1500 }),
   flip: (c) => { noise(c, { t: 0.05, vol: 0.1, hp: 2000 }); tone(c, { f: 600, t: 0.05, vol: 0.04, slide: 300 }); },
   check: (c) => { tone(c, { f: 180, t: 0.05, type: 'triangle', vol: 0.25 }); tone(c, { f: 160, t: 0.05, type: 'triangle', vol: 0.2, at: 0.09 }); },
+  call: (c) => synth.chip(c),
+  raise: (c) => synth.chips(c),
   fold: (c) => synth.tap(c),
   win: (c) => [523, 659, 784].forEach((f, i) => tone(c, { f, t: 0.15, at: i * 0.08, vol: 0.12 })),
   bigwin: (c) => [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(c, { f, t: 0.2, at: i * 0.1, vol: 0.14 })),

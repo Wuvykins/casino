@@ -25,6 +25,7 @@ page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => { if (m.type() === 'error' && !/404/.test(m.text())) errors.push('console: ' + m.text()); });
 
 await page.goto(url);
+await page.waitForSelector('#splash.can-skip', { timeout: 8000 }).then(() => page.tap('#splash')).catch(() => {}); // skip the intro video
 await page.waitForSelector('input[placeholder*="call you"]', { timeout: 10000 });
 await page.fill('input[placeholder*="call you"]', 'Nic');
 await page.click('text=Let\'s play');
@@ -47,6 +48,8 @@ let leaveClicked = false;
 while (Date.now() - t0 < 240000) {
   if (hands >= HANDS && !leaveClicked && await page.$('.felt')) { await page.click('text=Leave table'); leaveClicked = true; }
   if (await page.$('.lobby')) break;
+  const leaveNow = await page.$('.overlay.open .modal button:has-text("Leave now")');
+  if (leaveNow) { await leaveNow.click(); await page.waitForTimeout(300); continue; }
   const bar = await page.$('.actionbar:not(.hidden)');
   if (bar) {
     const buttons = await bar.$$('button.act');

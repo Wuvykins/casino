@@ -3,6 +3,7 @@ import { h, clear, sleep, modal, toast } from './dom.js';
 import { cardEl, chipStackEl, portraitEl, creditCardEl, chooseDeckBack, CHIP_DENOMS, askLeave } from './components.js';
 import { Shoe, Round, handValue, isBlackjack, aiDecide, cardValue } from '../core/blackjack.js';
 import { makeRng } from '../core/rng.js';
+import { LUCK, bjLuckyDeal, bjLuckyHit, bjDealerBusts } from '../core/luck.js';
 import { bank, fmt$ } from '../core/bank.js';
 import { assets } from '../core/assets.js';
 import { audio } from '../core/audio.js';
@@ -167,6 +168,7 @@ export class BlackjackTable {
     const round = new Round({ shoe: this.shoe, players });
     this.round = round; this.cursor = 0;
     this.say('');
+    if (!this.shoe.needsShuffle && this.rng.chance(LUCK.bjDeal)) bjLuckyDeal(this.shoe, players.length, players.findIndex((p) => p.id === HUMAN), this.rng);
     round.deal();
     await this.drain();
     if (round.phase === 'insurance') {
@@ -193,12 +195,19 @@ export class BlackjackTable {
       else { action = aiDecide(hand.cards, round.dealerUp, affordable, seat.char.persona, this.rng); await this.wait(650 + this.rng.next() * 700); }
       if (this.stopped) return;
       if (action === 'double' || action === 'split') { seat.stack -= hand.bet; this.updateStack(seat); }
+      if (seat.isHuman && action === 'hit' && this.rng.chance(LUCK.bjHit)) bjLuckyHit(this.shoe, hand.cards, this.rng);
       round.act(action);
       if (!seat.isHuman) this.talk(seat, action, {}, action === 'hit' || action === 'stand' ? 0.3 : 0.7);
       await this.drain();
     }
     this.highlight(null);
-    if (round.phase === 'dealer') { await this.wait(500); round.playDealer(); await this.drain(); }
+    if (round.phase === 'dealer') {
+      // standing on a stiff hand? every so often the dealer's draw goes over
+      const me = round.player(HUMAN);
+      const stiff = me?.hands.some((hd) => hd.result !== 'bust' && !isBlackjack(hd.cards) && handValue(hd.cards).total >= 12 && handValue(hd.cards).total <= 16);
+      if (stiff && this.rng.chance(LUCK.bjDealerBust)) bjDealerBusts(this.shoe, round.dealer.cards, round.rules.dealerHitsSoft17, this.rng);
+      await this.wait(500); round.playDealer(); await this.drain();
+    }
     await this.settleUI();
   }
 

@@ -5,6 +5,7 @@ import { Hand } from '../core/poker.js';
 import { decide, updateMood, thinkTime, readsFromPersonas } from '../core/ai.js';
 import { evaluate, describe, category } from '../core/evaluator.js';
 import { makeRng } from '../core/rng.js';
+import { LUCK, luckyHoldemDeck, betterHoleCards } from '../core/luck.js';
 import { bank, fmt$ } from '../core/bank.js';
 import { assets } from '../core/assets.js';
 import { audio } from '../core/audio.js';
@@ -64,7 +65,7 @@ export class HoldemTable {
   // ---------- DOM ----------
   build() {
     clear(this.root);
-    this.el = h('div', { class: 'table-screen' });
+    this.el = h('div', { class: 'table-screen holdem' });
     this.topbar = h('div', { class: 'topbar table-top' },
       h('button', { class: 'btn ghost small', onClick: () => this.requestLeave() }, '‹ Leave table'),
       h('div', { class: 'tt-title' }, this.table.name),
@@ -147,7 +148,7 @@ export class HoldemTable {
     // move the button to the next occupied seat
     this.button = (this.button + 1) % players.length;
     this.handNo++;
-    const hand = new Hand({ table: this.table, players, button: this.button, rng: this.rng });
+    const hand = new Hand({ table: this.table, players, button: this.button, rng: this.rng, deck: this.luckyDeck(players) });
     this.hand = hand; this.cursor = 0; this.resolveNext = null;
     this.resetHandUI();
     hand.start();
@@ -178,6 +179,18 @@ export class HoldemTable {
     this.humanStats.hands++; if (voluntary) this.humanStats.vpip++;
     this.updateReads();
     await this.finishHand();
+  }
+
+  // Now and then the deck is arranged in your favour (see core/luck.js). null = an honest shuffle.
+  luckyDeck(players) {
+    if (!players.some((p) => p.id === HUMAN) || players.length < 2) return null;
+    const n = players.length;
+    const order = players.map((_, k) => players[(this.button + 1 + k) % n].id);
+    const r = this.rng.next();
+    if (r < LUCK.holdemFamily) return luckyHoldemDeck(order, HUMAN, 'family', this.rng);
+    if (r < LUCK.holdemFamily + LUCK.holdemValue) return luckyHoldemDeck(order, HUMAN, 'value', this.rng);
+    if (r < LUCK.holdemFamily + LUCK.holdemValue + LUCK.goodHoleCards) return betterHoleCards(order, HUMAN, this.rng);
+    return null;
   }
 
   resetHandUI() {
@@ -225,6 +238,7 @@ export class HoldemTable {
         }
         case 'blind': {
           this.setTag(ev.playerId, ev.kind === 'sb' ? 'Small blind' : 'Big blind');
+          audio.play('call', { volume: 0.5 }); // ante up
           this.renderMoney();
           break;
         }
@@ -376,7 +390,8 @@ export class HoldemTable {
     }
     else if (ev.action === 'check') audio.play('check');
     else if (p.allIn) { audio.play('allin'); E.seatEl.classList.add('allin'); }
-    else audio.play(ev.amount > this.table.bb * 6 ? 'chips' : 'chip');
+    else if (ev.action === 'call' && this.hand.street === 'preflop' && this.hand.currentBet <= this.table.bb) audio.play('call'); // just calling the blind
+    else audio.play('raise'); // bet, raise, or calling a raise
     this.renderMoney();
     if (!seat.isHuman) {
       const trig = action.why === 'too much checking' ? 'tooMuchChecking' : p.allIn && ev.action !== 'fold' ? 'allin' : ev.action === 'bet' ? 'raise' : ev.action;
@@ -469,7 +484,7 @@ export class HoldemTable {
     const confirm = h('button', { class: 'act raise' }, '');
     const set = (v) => { to = Math.min(legal.maxRaiseTo, Math.max(legal.minRaiseTo, Math.round(v / step) * step)); slider.value = to; amt.textContent = fmt$(to); confirm.textContent = to >= legal.maxRaiseTo ? `All in ${fmt$(to)}` : `${legal.isBet ? 'Bet' : 'Raise to'} ${fmt$(to)}`; };
     slider.addEventListener('input', () => set(+slider.value));
-    confirm.addEventListener('click', () => { audio.play('chips'); done({ type: 'raise', amount: to }); });
+    confirm.addEventListener('click', () => { audio.play('tap'); done({ type: 'raise', amount: to }); }); // the chip sound plays when the raise lands
     const presets = h('div', { class: 'presets' },
       h('button', { class: 'pre', onClick: () => set(legal.minRaiseTo) }, 'Min'),
       h('button', { class: 'pre', onClick: () => set(preset(0.5)) }, '½ Pot'),

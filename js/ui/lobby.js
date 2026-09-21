@@ -44,11 +44,13 @@ export function renderLobby(root, { onEnter }) {
       const isCashier = id === 'cashier';
       const open = isCashier || g?.open;
       spots.append(h('button', {
-        class: 'hotspot' + (open ? '' : ' closed') + (broke && g?.open ? ' broke' : ''),
+        class: 'hotspot' + (open ? '' : ' closed') + (broke && g?.open ? ' broke' : ''), 'data-game': id, title: isCashier ? 'Cashier' : g.name,
         style: { left: r.x + '%', top: r.y + '%', width: r.w + '%', height: r.h + '%' },
         disabled: !open,
         onClick: () => { audio.play('tap'); if (isCashier) showBank(root, { onEnter }); else onEnter(id); },
-      }, h('span', { class: 'hs-label' }, isCashier ? (broke ? 'Cashier · ask Ken' : 'Cashier') : broke && g.open ? `${g.name} · need money` : open ? g.name : `${g.name} · soon`)));
+      }, isCashier || !open || broke   // open games speak for themselves (the signs are in the painting); labels only where they add something
+        ? h('span', { class: 'hs-label' }, isCashier ? (broke ? 'Cashier · ask Ken' : 'Cashier') : broke && g.open ? `${g.name} · need money` : `${g.name} · soon`)
+        : null));
     }
     const footer = h('div', { class: 'lobby-footer' },
       broke ? h('button', { class: 'btn primary ken-btn', onClick: () => askKen(root, { onEnter }) }, 'Ask Ken for money') : null,
@@ -167,6 +169,7 @@ export function showSettings(root, ctx, opts = {}) {
         atTable ? null : h('div', { class: 'field' }, h('label', {}, 'Your name'), nameIn),
         check('sound', 'Sound effects'), check('voices', 'Voice lines'),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: s.settings.music !== false ? true : null, onChange: (e) => { bank.setSetting('music', e.target.checked); music.refresh(); } }), 'Music'),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: s.settings.roomSound !== false ? true : null, onChange: (e) => { bank.setSetting('roomSound', e.target.checked); music.refresh(); } }), 'Lobby room sound'),
       h('div', { class: 'field' }, h('label', {}, 'Music volume'), h('input', { type: 'range', min: 0, max: 1, step: 0.05, value: typeof s.settings.musicVolume === 'number' ? s.settings.musicVolume : 0.7, onInput: (e) => { bank.setSetting('musicVolume', +e.target.value); music.refresh(); } })),
         h('div', { class: 'field' }, h('label', {}, 'Opponent speed'), speed),
         atTable ? null : h('details', {}, h('summary', {}, rep.missing.length ? `Art files: ${rep.missing.length} still placeholders` : 'Art files: all in place'),

@@ -25,6 +25,7 @@ page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => { if (m.type() === 'error' && !/404/.test(m.text())) errors.push('console: ' + m.text()); });
 
 await page.goto(url);
+await page.waitForSelector('#splash.can-skip', { timeout: 8000 }).then(() => page.tap('#splash')).catch(() => {}); // skip the intro video
 await page.waitForSelector('input[placeholder*="call you"]', { timeout: 10000 });
 await page.fill('input[placeholder*="call you"]', 'Nic');
 await page.click("text=Let's play");
@@ -34,7 +35,7 @@ await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('casino.sa
 await page.reload();
 await page.waitForSelector('.lobby');
 
-await page.click('button.hotspot:has-text("Blackjack"), .door:has-text("Blackjack")');
+await page.click('button.hotspot[data-game="blackjack"], .door:has-text("Blackjack")');
 await page.waitForSelector('.select-screen');
 await page.screenshot({ path: 'tests/shots/bj-select.png' });
 await page.click('.table-tile:not(.locked)');
