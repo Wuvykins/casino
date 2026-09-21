@@ -1,6 +1,6 @@
 // The Hold'em table: seats, chips, action bar, hand loop, opponents' talk. Sits on top of core/poker.js.
 import { h, clear, sleep, modal, toast } from './dom.js';
-import { cardEl, chipStackEl, portraitEl, playerAvatarEl, creditCardEl, chooseDeckBack } from './components.js';
+import { cardEl, chipStackEl, portraitEl, playerAvatarEl, creditCardEl, chooseDeckBack, askLeave } from './components.js';
 import { Hand } from '../core/poker.js';
 import { decide, updateMood, thinkTime, readsFromPersonas } from '../core/ai.js';
 import { evaluate, describe, category } from '../core/evaluator.js';
@@ -563,17 +563,31 @@ export class HoldemTable {
     });
   }
 
-  requestLeave() {
+  async requestLeave() {
     audio.play('tap');
     if (this.hand && !this.hand.finished) {
-      this.leaving = !this.leaving;
-      toast(this.leaving ? 'Leaving after this hand.' : 'Staying.');
-      // if it's our turn and we haven't acted, a fold is still ours to choose; nothing forced
+      const p = this.hand.players.find((x) => x.id === HUMAN);
+      const inPot = p?.committed || 0;
+      const choice = await askLeave({
+        text: "You're in the middle of a hand.",
+        afterLabel: 'After this hand', nowLabel: 'Leave now',
+        nowNote: inPot ? `Leaving now folds your hand; the ${fmt$(inPot)} you've put in the pot stays behind.` : 'Leaving now folds your hand.',
+      });
+      if (choice === 'now') { this.leaveNow(); return; }
+      this.leaving = choice === 'after';
+      if (this.leaving) toast('Leaving after this hand.');
     } else if (this.resolveNext) {
       this.resolveNext();
     } else {
       this.leaving = true;
     }
+  }
+  // Walk out mid-hand: whatever is in the pot is forfeited, the rest of the stack goes back to the bank.
+  leaveNow() {
+    clearTimeout(this.hurryT);
+    const p = this.hand?.players.find((x) => x.id === HUMAN);
+    if (p) this.human.stack = p.stack;
+    this.leave();
   }
 
   async leave() {

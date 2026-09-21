@@ -1,5 +1,5 @@
 // Visual building blocks: playing cards, chips, portraits, credit cards. Each uses your art when present.
-import { h } from './dom.js';
+import { h, modal } from './dom.js';
 import { assets } from '../core/assets.js';
 import { cardKey, RANK_LABEL, SUIT_GLYPH, isRed } from '../core/cards.js';
 import { fmt$ } from '../core/bank.js';
@@ -103,3 +103,18 @@ export function creditCardEl(tier, playerName, { size = 'md' } = {}) {
 
 export function tierBadge(tier) { return h('span', { class: `tierbadge tier-${tier.id}` }, tier.name); }
 export { TIERS };
+
+
+// "Leave table" while something is in progress: stay, finish first, or walk out now (with whatever that costs).
+// Resolves 'stay' | 'after' | 'now'.
+export function askLeave({ title = 'Leave the table?', text, afterLabel = 'After this hand', nowLabel = 'Leave now', nowNote = '' }) {
+  return modal({
+    title, dismissable: true,
+    body: (el) => el.append(h('p', {}, text), nowNote ? h('p', { class: 'muted small' }, nowNote) : null),
+    buttons: [
+      { label: 'Stay', kind: 'ghost', value: 'stay' },
+      { label: afterLabel, kind: 'ghost', value: 'after' },
+      { label: nowLabel, kind: 'danger', value: 'now' },
+    ],
+  }).then((v) => v || 'stay');
+}

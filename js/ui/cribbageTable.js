@@ -1,6 +1,6 @@
 // The cribbage table: one opponent across from you, a board along the top, your cards big along the bottom.
 import { h, clear, sleep, modal, toast } from './dom.js';
-import { cardEl, chipStackEl, portraitEl, creditCardEl, chooseDeckBack } from './components.js';
+import { cardEl, chipStackEl, portraitEl, creditCardEl, chooseDeckBack, askLeave } from './components.js';
 import { Game, scorePlay, chooseDiscard, choosePlay, pegValue, TARGET } from '../core/cribbage.js';
 import { cardKey, sameCard } from '../core/cards.js';
 import { makeRng } from '../core/rng.js';
@@ -524,7 +524,7 @@ export class CribbageTable {
     });
   }
 
-  requestLeave() {
+  async requestLeave() {
     audio.play('tap');
     // between games (or before the first deal) we can go right away
     if (!this.game || this.game.phase === 'over' || this.game.phase === 'new') {
@@ -533,8 +533,19 @@ export class CribbageTable {
       if (btn && /Deal/.test(btn.textContent)) { this.hideButtons(); this.leave(); }
       return;
     }
-    this.leaving = !this.leaving;
-    toast(this.leaving ? 'Leaving after this game.' : 'Staying.');
+    const choice = await askLeave({
+      text: `A game is in progress (${this.game.scores[HUMAN]} – ${this.game.scores[this.opp]}).`,
+      afterLabel: 'Finish this game', nowLabel: 'Leave now',
+      nowNote: `Leaving now counts as a loss: ${fmt$(this.table.stake)} goes to ${this.char.name}.`,
+    });
+    if (choice === 'now') { this.forfeit(); this.leave(); return; }
+    this.leaving = choice === 'after';
+    if (this.leaving) toast('Leaving after this game.');
+  }
+  forfeit() {
+    const amount = Math.min(this.table.stake, this.stack);
+    this.stack -= amount; this.oppStack += amount;
+    bank.recordHand({ won: false, showdown: false, pot: amount, net: -amount, handName: null, handScore: 0 });
   }
 
   async leave() {

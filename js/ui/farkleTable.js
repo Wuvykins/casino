@@ -1,6 +1,6 @@
 // The farkle table: one to three of the family across from you, six big dice in the middle.
 import { h, clear, sleep, modal, toast } from './dom.js';
-import { chipStackEl, portraitEl, creditCardEl } from './components.js';
+import { chipStackEl, portraitEl, creditCardEl, askLeave } from './components.js';
 import { Game, scoreSelection, chooseKeep, shouldBank, bestKeep, TARGET, ENTRY } from '../core/farkle.js';
 import { makeRng } from '../core/rng.js';
 import { bank, fmt$ } from '../core/bank.js';
@@ -425,11 +425,22 @@ export class FarkleTable {
     });
   }
 
-  requestLeave() {
+  async requestLeave() {
     audio.play('tap');
     if (!this.game || this.game.phase === 'over') { this.leaving = true; return; }
-    this.leaving = !this.leaving;
-    toast(this.leaving ? 'Leaving after this game.' : 'Staying.');
+    const choice = await askLeave({
+      text: 'A game is in progress.',
+      afterLabel: 'Finish this game', nowLabel: 'Leave now',
+      nowNote: `Leaving now counts as a loss: your ${fmt$(this.table.stake)} stays in the pot.`,
+    });
+    if (choice === 'now') { this.forfeit(); this.leave(); return; }
+    this.leaving = choice === 'after';
+    if (this.leaving) toast('Leaving after this game.');
+  }
+  forfeit() {
+    const amount = Math.min(this.table.stake, this.stack);
+    this.stack -= amount;
+    bank.recordHand({ won: false, showdown: false, pot: amount, net: -amount, handName: null, handScore: 0 });
   }
 
   async leave() {

@@ -1,6 +1,6 @@
 // The blackjack table: dealer up top, you in the middle seat, up to two of the family beside you.
 import { h, clear, sleep, modal, toast } from './dom.js';
-import { cardEl, chipStackEl, portraitEl, creditCardEl, chooseDeckBack, CHIP_DENOMS } from './components.js';
+import { cardEl, chipStackEl, portraitEl, creditCardEl, chooseDeckBack, CHIP_DENOMS, askLeave } from './components.js';
 import { Shoe, Round, handValue, isBlackjack, aiDecide, cardValue } from '../core/blackjack.js';
 import { makeRng } from '../core/rng.js';
 import { bank, fmt$ } from '../core/bank.js';
@@ -425,11 +425,18 @@ export class BlackjackTable {
     });
   }
 
-  requestLeave() {
+  async requestLeave() {
     audio.play('tap');
     if (this.resolveBetting) { this.resolveBetting(); return; }
-    this.leaving = !this.leaving;
-    toast(this.leaving ? 'Leaving after this hand.' : 'Staying.');
+    const bet = this.round ? this.round.player(HUMAN)?.hands.reduce((s, h) => s + h.bet, 0) || 0 : 0;
+    const choice = await askLeave({
+      text: 'A hand is being played.',
+      afterLabel: 'After this hand', nowLabel: 'Leave now',
+      nowNote: bet ? `Leaving now forfeits the ${fmt$(bet)} you have on the table this hand.` : '',
+    });
+    if (choice === 'now') { this.leave(); return; }
+    this.leaving = choice === 'after';
+    if (this.leaving) toast('Leaving after this hand.');
   }
 
   async leave() {
