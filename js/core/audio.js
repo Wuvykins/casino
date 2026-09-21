@@ -124,7 +124,7 @@ export const music = {
   get roomEnabled() { return bank.state?.settings?.roomSound !== false; },
   get roomWanted() { return !ducked && this.roomEnabled && audio.musicEnabled && musicFiles.has('room'); },
   has(key) { return musicFiles.has(key); },
-  debug() { return { track: track ? (track.el.paused ? 'paused' : 'playing') + (track.filter ? ` lp ${Math.round(track.filter.frequency.value)}` : '') + ` gain ${track.gain?.gain.value.toFixed(2)}` : null, room: room ? (room.el.paused ? 'paused' : 'playing') + ` gain ${room.gain?.gain.value.toFixed(2)}` : null, ducked }; },
+  debug() { return { track: track ? track.el.src.split('/').pop() + ' ' + (track.el.paused ? 'paused' : 'playing') + (track.filter ? ` lp ${Math.round(track.filter.frequency.value)}` : '') + ` gain ${track.gain?.gain.value.toFixed(2)}` : null, room: room ? (room.el.paused ? 'paused' : 'playing') + ` gain ${room.gain?.gain.value.toFixed(2)}` : null, ducked }; },
   key: null,
   play(key) {
     if (this.key === key && track && !track.el.paused) return;
@@ -157,6 +157,14 @@ export const music = {
       rampGain(room, roomLevel(), 1500);
     } else if (!want && room) { const r = room; room = null; stopNode(r, 700); }
     else if (room) rampGain(room, roomLevel(), 300);
+  },
+  // Next song, please. Fades the current one out quickly and starts another straight away (no gap).
+  skip() {
+    if (!playlist.length || !audio.musicEnabled) return false;
+    const k = this.key || 'lobby';
+    this.stop(250); this.key = null;
+    this.play(k);
+    return true;
   },
   stop(ms = 600) {
     this.key = null;

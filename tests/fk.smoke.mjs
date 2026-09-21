@@ -24,14 +24,14 @@ page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => { if (m.type() === 'error' && !/404/.test(m.text())) errors.push('console: ' + m.text()); });
 
 await page.goto(url);
-await page.waitForSelector('#splash.can-skip', { timeout: 8000 }).then(() => page.tap('#splash')).catch(() => {}); // skip the intro video
+await page.waitForSelector('#splash.ready', { timeout: 8000 }).then(() => page.tap('#splash')).catch(() => {}); await page.waitForSelector('#splash.can-skip', { timeout: 3000 }).then(() => page.tap('#splash')).catch(() => {}); // skip the intro video
 await page.waitForSelector('input[placeholder*="call you"]', { timeout: 10000 });
 await page.fill('input[placeholder*="call you"]', 'Nic');
 await page.click("text=Let's play");
 await page.waitForSelector('.lobby');
 // speed the AI up
 await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('casino.save.v1')); s.settings = { ...(s.settings || {}), aiSpeed: 3 }; localStorage.setItem('casino.save.v1', JSON.stringify(s)); });
-await page.reload();
+await page.reload(); await page.waitForSelector('#splash.ready', { timeout: 8000 }).then(() => page.tap('#splash')).catch(() => {}); await page.waitForSelector('#splash.can-skip', { timeout: 3000 }).then(() => page.tap('#splash')).catch(() => {});
 await page.waitForSelector('.lobby');
 
 await page.click('button.hotspot[data-game="farkle"], .door:has-text("Farkle")');

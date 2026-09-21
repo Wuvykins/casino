@@ -66,26 +66,38 @@ function goFarkleSelect() {
   });
 }
 
-// Startup: Nic's intro video plays while the save, art and sounds load (about a second). The logo forms at normal
-// speed; once loading is done the rest of the video runs faster, so the whole thing takes ~8 s instead of 12.
-// A tap skips the video (and, since a tap is a gesture, unmutes it for whatever is left).
+// Startup: the intro video starts by itself, with sound, wherever the browser allows that. Phones refuse to play
+// sound until the person has tapped once, so there the app shows "Tap to enter" on the intro's first frame and
+// that tap starts Nic's intro video — with sound — while the save, art and sounds load
+// (about a second). The logo forms at normal speed; once loading is done the rest runs faster (~8 s instead of 12).
+// A tap after 2.5 s skips the rest.
 const INTRO_LOGO_AT = 5.2;   // seconds into the video when the logo has formed
 const INTRO_FAST = 2.2;      // once loading is done, the rest of the video (the progress bar) runs this much faster
 function playIntro(splash) {
   const video = splash?.querySelector('video');
   if (!video) return { done: Promise.resolve(), loaded() {} };
-  let loadedFlag = false;
+  let loadedFlag = false, started = false, finished = false;
   const hurry = () => { if (loadedFlag && video.currentTime >= INTRO_LOGO_AT) video.playbackRate = INTRO_FAST; };
   video.addEventListener('timeupdate', hurry);
   const done = new Promise((resolve) => {
-    let done = false;
-    const finish = () => { if (!done) { done = true; resolve(); } };
+    const finish = () => { if (!finished) { finished = true; resolve(); } };
     video.addEventListener('ended', finish);
     video.addEventListener('error', finish);
-    video.play().catch(finish);                       // can't autoplay here? go straight in
-    setTimeout(() => splash.classList.add('can-skip'), 2500);
-    setTimeout(finish, 15000);                        // never hold the door longer than this
-    splash.addEventListener('pointerdown', () => { if (splash.classList.contains('can-skip')) finish(); else { video.muted = false; } });
+    const start = () => {
+      if (started) return;
+      started = true; splash.classList.add('started');
+      video.muted = false;
+      if (video.paused) video.play().catch(finish);     // can't play here? go straight in
+      setTimeout(() => splash.classList.add('can-skip'), 2500);
+      setTimeout(finish, 15000);                        // never hold the door longer than this
+      setTimeout(() => { if (video.readyState === 0) finish(); }, 4000); // nothing decoded after 4 s? the file isn't playable here
+    };
+    splash.addEventListener('pointerdown', () => { if (!started) start(); else if (splash.classList.contains('can-skip')) finish(); });
+    splash.classList.add('ready');
+    // Try to just go, with sound. Browsers that allow it (desktop, most of the time) never see the gate; the ones
+    // that insist on a tap first (iPhone, iPad) refuse here, and then we ask for the tap.
+    video.muted = false;
+    video.play().then(() => { if (!started) start(); }).catch(() => { if (!started) splash.classList.add('gate'); });
   });
   return { done, loaded() { loadedFlag = true; hurry(); } };
 }

@@ -168,7 +168,10 @@ export function showSettings(root, ctx, opts = {}) {
       append(el, [
         atTable ? null : h('div', { class: 'field' }, h('label', {}, 'Your name'), nameIn),
         check('sound', 'Sound effects'), check('voices', 'Voice lines'),
-      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: s.settings.music !== false ? true : null, onChange: (e) => { bank.setSetting('music', e.target.checked); music.refresh(); } }), 'Music'),
+      h('div', { class: 'row space' },
+        h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: s.settings.music !== false ? true : null, onChange: (e) => { bank.setSetting('music', e.target.checked); music.refresh(); } }), 'Music'),
+        h('button', { class: 'btn ghost small', onClick: () => { audio.play('tap'); if (music.skip()) toast('Next song'); else toast('Music is off'); } }, 'Skip song ⏭'),
+      ),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: s.settings.roomSound !== false ? true : null, onChange: (e) => { bank.setSetting('roomSound', e.target.checked); music.refresh(); } }), 'Lobby room sound'),
       h('div', { class: 'field' }, h('label', {}, 'Music volume'), h('input', { type: 'range', min: 0, max: 1, step: 0.05, value: typeof s.settings.musicVolume === 'number' ? s.settings.musicVolume : 0.7, onInput: (e) => { bank.setSetting('musicVolume', +e.target.value); music.refresh(); } })),
         h('div', { class: 'field' }, h('label', {}, 'Opponent speed'), speed),

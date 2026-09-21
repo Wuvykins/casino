@@ -8,7 +8,7 @@ await new Promise((r) => server.listen(0, r)); const url = `http://127.0.0.1:${s
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
 const page = await browser.newPage({ viewport: { width: 844, height: 390 } });
 const errors = []; page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
-await page.goto(url); await page.waitForSelector('#splash.can-skip', { timeout: 8000 }).then(() => page.tap('#splash')).catch(() => {}); await page.waitForSelector('input[placeholder*="call you"]'); await page.fill('input[placeholder*="call you"]', 'Nic'); await page.click("text=Let's play"); await page.waitForSelector('.lobby');
+await page.goto(url); await page.waitForSelector('#splash.ready', { timeout: 8000 }).then(() => page.tap('#splash')).catch(() => {}); await page.waitForSelector('#splash.can-skip', { timeout: 3000 }).then(() => page.tap('#splash')).catch(() => {}); await page.waitForSelector('input[placeholder*="call you"]'); await page.fill('input[placeholder*="call you"]', 'Nic'); await page.click("text=Let's play"); await page.waitForSelector('.lobby');
 const bankOf = async () => +(await page.$eval('.lobby .bank-balance .amount', (e) => e.textContent)).replace(/[^0-9]/g, '');
 const results = [];
 for (const [game, ready] of [["Texas Hold'em", '.actionbar:not(.hidden) button.act'], ['Blackjack', '.actionbar:not(.hidden) button.act'], ['Cribbage', '.cb-hand .pcard'], ['Farkle', '.actionbar:not(.hidden) button.act']]) {

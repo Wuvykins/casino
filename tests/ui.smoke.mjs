@@ -25,7 +25,7 @@ page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => { if (m.type() === 'error' && !/404/.test(m.text())) errors.push('console: ' + m.text()); });
 
 await page.goto(url);
-await page.waitForSelector('#splash.can-skip', { timeout: 8000 }).then(() => page.tap('#splash')).catch(() => {}); // skip the intro video
+await page.waitForSelector('#splash.ready', { timeout: 8000 }).then(() => page.tap('#splash')).catch(() => {}); await page.waitForSelector('#splash.can-skip', { timeout: 3000 }).then(() => page.tap('#splash')).catch(() => {}); // skip the intro video
 await page.waitForSelector('input[placeholder*="call you"]', { timeout: 10000 });
 await page.fill('input[placeholder*="call you"]', 'Nic');
 await page.click('text=Let\'s play');
@@ -93,7 +93,7 @@ const txs = await page.$$eval('.tx', (els) => els.map((e) => e.innerText.replace
 // ---- Ken: go broke, ask for money ----
 await page.keyboard.press('Escape');
 await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('casino.save.v1')); s.bank = 0; localStorage.setItem('casino.save.v1', JSON.stringify(s)); });
-await page.reload();
+await page.reload(); await page.waitForSelector('#splash.ready', { timeout: 8000 }).then(() => page.tap('#splash')).catch(() => {}); await page.waitForSelector('#splash.can-skip', { timeout: 3000 }).then(() => page.tap('#splash')).catch(() => {});
 await page.waitForSelector('.lobby');
 await page.click('text=Ask Ken for money');
 await page.waitForSelector('.ken-scene');
@@ -105,7 +105,7 @@ await page.waitForFunction(() => document.querySelector('.lobby .bank-balance .a
 const afterKen = await page.$eval('.lobby .bank-balance .amount', (e) => e.textContent);
 // ---- tier upgrade on cash-out: fake a fat stack sitting at a table, reload restores it ----
 await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('casino.save.v1')); s.atTable = { tableId: 'nl-1-2', stack: 30000, opponents: [] }; localStorage.setItem('casino.save.v1', JSON.stringify(s)); });
-await page.reload();
+await page.reload(); await page.waitForSelector('#splash.ready', { timeout: 8000 }).then(() => page.tap('#splash')).catch(() => {}); await page.waitForSelector('#splash.can-skip', { timeout: 3000 }).then(() => page.tap('#splash')).catch(() => {});
 await page.waitForSelector('.lobby');
 const tierTxt = await page.$eval('.lobby .ccard', (e) => e.className);
 await page.click('text=Settings');
