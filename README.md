@@ -49,9 +49,10 @@ Every piece of art has a fixed file name under `assets/`. Drop a PNG or JPG in w
 | Ken | `assets/img/portraits/ken.png` | 512×512 | shown in the bailout scene |
 | Credit cards (5) | `assets/img/cards/credit-1.png` … `credit-5.png` | 860×540 | Basic, Silver, Gold, Platinum, Sovereign. Corners are rounded by the game |
 | Poker table | `assets/img/table/felt-holdem.png` | 1774×887 (2:1), transparent outside the rail | in place — Nic's oval table, drawn at ~75% of the play area with the seats around it |
-| Blackjack table felt | `assets/img/table/felt-blackjack.png` | 2048×1024 | dealer's cards top centre, your cards centre, friends at 16% and 84% across; falls back to the poker felt |
+| Blackjack scene | `assets/img/table/felt-blackjack.jpg` | 1774×887 (2:1) | in place — Nic's mockup (whole screen); hands sit in the three painted betting circles |
 | Cribbage board | `assets/img/table/cribbage-board.png` | 2138×275 | Nic's board (in place). Two lanes × two rows of 60 holes (one hole per point); hole positions are listed in `BOARD_ART` in `js/ui/cribbageTable.js`. Pegs: `cribbage-peg-gold.png` (yours), `cribbage-peg-red.png` (theirs), 128×128 transparent |
 | Dice (6) | `assets/img/dice/1.png` … `6.png` | 256×256 | optional; drawn by the game otherwise |
+| Slot machine | `assets/img/slots/background.jpg` + `symbols.jpg` | 1774×887 | in place — the empty cabinet, and the same shot with symbols on the reels (the game crops them out) |
 | Farkle scene | `assets/img/table/felt-farkle.jpg` | 1774×887 (2:1) | in place — the whole screen incl. the room; the rail interior is where the dice land |
 | Dice cup | `assets/img/farkle/cup.png` | ~660×700, transparent | in place — shaken and tipped before every roll |
 | Cribbage table felt | `assets/img/table/felt-cribbage.png` | 2048×1024 | the board is drawn across the top, opponent at left, deck and crib at right, your cards along the bottom; falls back to the poker felt |
@@ -117,6 +118,14 @@ Ken has `bailout` and `bailoutAgain`, in `assets/voice/ken/`.
 ## Sound effects
 
 Synthesised placeholders play until you drop files in `assets/sfx/<name>.mp3` (or .m4a/.wav): `tap chip chips deal flip check call raise fold win bigwin lose allin tierup tierdown bailout shuffle yourturn dice`. Nic's recordings so far: deal, check, call (ante up), raise, allin, lose, dice.
+
+## Music and the Setlist
+
+Songs live in `assets/music/song-N.mp3`, numbered from 1 with no gaps (the game stops looking at the first missing number). To add one:
+
+    python3 tools/make_song.py "Some Song.mp3" 26
+
+That trims the lead-in, softens it to sound like a speaker across the room and matches the level of the others. Then add a line for it to `assets/music/setlist.json` (`{ "file": "song-26.mp3", "title": "…", "artist": "…" }`) so it has a name, and run `python3 tools/build_sw.py`. Settings → **Setlist ♪** lists every song: untick one to take it out of the shuffle, ▶ plays it right now. Songs stream rather than being stored for offline play (there are too many for the phone to keep), so the music needs a connection; everything else in the game works offline.
 
 ## Tests
 

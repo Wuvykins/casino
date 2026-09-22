@@ -17,6 +17,7 @@ export const LUCK = {
   bjDeal: 0.06,         // per round: your first two cards make 20 or 21
   bjHit: 0.15,          // per hit on 12-16: the next card makes 17-21
   bjDealerBust: 0.15,   // per dealer play while you're standing on 12-16: the dealer goes over
+  slotSave: 0.06,       // per losing spin: quietly becomes a small win instead (never the jackpot)
 };
 
 // ---------- hold'em ----------

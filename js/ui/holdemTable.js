@@ -1,6 +1,6 @@
 // The Hold'em table: seats, chips, action bar, hand loop, opponents' talk. Sits on top of core/poker.js.
 import { h, clear, sleep, modal, toast } from './dom.js';
-import { cardEl, chipStackEl, portraitEl, playerAvatarEl, creditCardEl, chooseDeckBack, askLeave } from './components.js';
+import { cardEl, chipStackEl, portraitEl, playerAvatarEl, creditCardEl, chooseDeckBack, askLeave, resultBanner } from './components.js';
 import { Hand } from '../core/poker.js';
 import { decide, updateMood, thinkTime, readsFromPersonas } from '../core/ai.js';
 import { evaluate, describe, category } from '../core/evaluator.js';
@@ -13,6 +13,36 @@ import { CHARACTERS, characterById } from '../content/characters.js';
 import { pickLine } from '../content/lines.js';
 import { MAX_SEATS } from '../content/tables.js';
 import { showSettings } from './lobby.js';
+
+// "TOTAL POT" plaque (Nic's design): dark green plate with a gold rim; the amount counts up over 320 ms with an
+// ease-out and the rim flashes gold when the pot grows. Hidden while the pot is empty.
+class PotPlaque {
+  constructor() {
+    this.amtEl = h('div', { class: 'pp-amt' }, '$0');
+    this.el = h('div', { class: 'pot-plaque' }, h('div', { class: 'pp-label' }, 'TOTAL POT'), this.amtEl);
+    this.shown = 0; this.target = 0; this.raf = 0;
+  }
+  reset() { this.shown = 0; this.target = 0; cancelAnimationFrame(this.raf); this.el.classList.remove('show', 'pulse'); this.amtEl.textContent = '$0'; }
+  hide() { this.el.classList.remove('show'); }
+  set(next) {
+    next = Math.max(0, Math.round(next));
+    if (next === this.target) { if (next > 0) this.el.classList.add('show'); return; }
+    const from = this.shown, up = next > this.target;
+    this.target = next;
+    if (next > 0) this.el.classList.add('show');
+    cancelAnimationFrame(this.raf);
+    if (!up) { this.shown = next; this.amtEl.textContent = fmt$(next); return; }
+    const t0 = performance.now();
+    const step = (now) => {
+      const t = Math.min(1, (now - t0) / 320), e = 1 - Math.pow(1 - t, 3);
+      this.shown = Math.round(from + (next - from) * e);
+      this.amtEl.textContent = fmt$(this.shown);
+      if (t < 1) this.raf = requestAnimationFrame(step);
+    };
+    this.raf = requestAnimationFrame(step);
+    this.el.classList.remove('pulse'); void this.el.offsetWidth; this.el.classList.add('pulse');
+  }
+}
 
 const SEAT_POS = [
   { x: 42, y: 99 },   // you (anchored by its bottom edge)
@@ -67,7 +97,7 @@ export class HoldemTable {
     clear(this.root);
     this.el = h('div', { class: 'table-screen holdem' });
     this.topbar = h('div', { class: 'topbar table-top' },
-      h('button', { class: 'btn ghost small', onClick: () => this.requestLeave() }, '‹ Leave table'),
+      h('button', { class: 'btn ghost small leave-btn', onClick: () => this.requestLeave() }, '‹ Leave table'),
       h('div', { class: 'tt-title' }, this.table.name),
       h('div', { class: 'topbar-bank' }, 'Bank ', h('b', { class: 'bank-amt' }, fmt$(bank.state.bank))),
     );
@@ -75,8 +105,14 @@ export class HoldemTable {
     assets.bg(this.felt, 'table.felt.holdem');
     this.boardEl = h('div', { class: 'board' });
     this.potEl = h('div', { class: 'pot' });
+    this.plaque = new PotPlaque();   // Nic's "TOTAL POT" plaque, above the community cards
     this.msgEl = h('div', { class: 'table-msg' });
-    this.felt.append(h('div', { class: 'rail' }), this.boardEl, h('div', { class: 'under-board' }, this.potEl, this.msgEl));
+    // tall screens (iPad, desktop): the plaque floats above the community cards. Phones have no room up there
+    // (the top seat sits right over the board), so it goes in the middle of the row under the cards instead.
+    const tall = window.innerHeight >= 560;
+    this.el.classList.toggle('plaque-below', !tall);
+    if (tall) this.felt.append(h('div', { class: 'rail' }), this.plaque.el, this.boardEl, h('div', { class: 'under-board' }, this.potEl, this.msgEl));
+    else this.felt.append(h('div', { class: 'rail' }), this.boardEl, h('div', { class: 'under-board' }, this.potEl, this.plaque.el, this.msgEl));
     this.seatEls = {};
     for (const s of this.seats) {
       const pos = SEAT_POS[s.seat];
@@ -194,7 +230,7 @@ export class HoldemTable {
   }
 
   resetHandUI() {
-    clear(this.boardEl); this.potEl.textContent = ''; this.handInfo.textContent = ''; this.msgEl.textContent = '';
+    clear(this.boardEl); this.potEl.textContent = ''; this.handInfo.textContent = ''; this.msgEl.textContent = ''; this.plaque.reset();
     for (const s of this.seats) {
       const E = this.seatEls[s.id];
       clear(E.cards); clear(E.betEl); E.tag.textContent = ''; E.tag.className = 'action-tag';
@@ -302,14 +338,21 @@ export class HoldemTable {
           if (humanWon) {
             const hand = ev.showdown ? ev.awards.find((a) => a.playerId === HUMAN)?.hand : null;
             await this.wait(500);
-            if (humanGain > 0) await this.winBanner(humanGain, hand, bigWin);
+            if (humanGain > 0 && bigWin) await this.winBanner(humanGain, hand, true);
+            else if (humanGain > 0) await resultBanner(this.felt, { type: 'win', amount: humanGain, caption: hand ? '\u2660   ' + hand.toUpperCase() + '   \u2660' : '\u2660   HAND WON   \u2660' });
             else await this.wait(900); // got your own chips back (split pot, or an all-in that only pushed)
+          } else if (ev.showdown && this.hand.players.find((p) => p.id === HUMAN && !p.folded) && (this.hand.result.net[HUMAN] || 0) < 0) {
+            // you went to the river and came second: say so properly (the loss sound goes with the banner)
+            await this.wait(400);
+            audio.play('lose', { volume: 0.4 }); this.lossSoundPlayed = true;
+            await resultBanner(this.felt, { type: 'lose', amount: this.hand.result.net[HUMAN], title: `${names} win${winners.length > 1 ? '' : 's'}`, caption: ev.awards[0].hand ? ev.awards[0].hand.toUpperCase() : 'HAND COMPLETE' });
           } else {
             await this.wait(700);
           }
           for (const s of this.seats) { s.stack = this.hand.players.find((p) => p.id === s.id)?.stack ?? s.stack; this.updateSeat(s); }
           for (const E of Object.values(this.seatEls)) { const shown = E.betEl.querySelector('.shown'); if (!shown) clear(E.betEl); }
           this.potEl.textContent = '';
+          this.plaque.hide();
           break;
         }
         default: break;
@@ -411,8 +454,8 @@ export class HoldemTable {
     }
     const collected = final ? hand.pot : hand.potBeforeStreet;
     clear(this.potEl);
-    if (collected > 0) this.potEl.append(chipStackEl(collected, { maxChips: 8, compact: true, label: false }), h('div', { class: 'pot-label' }, 'Pot ' + fmt$(hand.pot)));
-    else if (hand.pot > 0) this.potEl.append(h('div', { class: 'pot-label' }, 'Pot ' + fmt$(hand.pot)));
+    if (collected > 0) this.potEl.append(chipStackEl(collected, { maxChips: 8, compact: true, label: false }));
+    this.plaque.set(hand.pot);   // blinds + every bet count toward the total
   }
   updateSeat(s) { const E = this.seatEls[s.id]; if (E) { E.stackEl.textContent = fmt$(s.stack); E.seatEl.classList.toggle('sitting-out', s.stack <= 0); } }
   setTag(id, text, kind = '') { const E = this.seatEls[id]; if (!E) return; E.tag.textContent = text; E.tag.className = 'action-tag show ' + kind; }
@@ -458,14 +501,14 @@ export class HoldemTable {
       const btn = (label, cls, fn) => h('button', { class: 'act ' + cls, onClick: () => { audio.play('tap'); fn(); } }, label);
       bar.append(btn('Fold', 'fold', () => done({ type: 'fold' })));
       if (legal.canCheck) bar.append(btn('Check', 'check', () => done({ type: 'check' })));
-      else bar.append(btn(`Call ${fmt$(legal.callAmount)}`, 'call', () => done({ type: 'call' })));
+      else bar.append(btn(['Call ', h('span', { class: 'amt' }, fmt$(legal.callAmount))], 'call', () => done({ type: 'call' })));
       if (legal.canRaise) {
         const verb = legal.isBet ? 'Bet' : 'Raise';
         if (legal.fixed) bar.append(btn(`${verb} ${fmt$(legal.minRaiseTo)}`, 'raise', () => done({ type: 'raise', amount: legal.minRaiseTo })));
         else bar.append(btn(verb + '…', 'raise', () => this.raisePanel(legal, p, done)));
       } else if (legal.canCall && legal.callAmount >= p.stack) {
         // the call is all-in; make that obvious
-        bar.querySelector('.call').textContent = `All in ${fmt$(legal.callAmount)}`;
+        const c = bar.querySelector('.call'); clear(c); c.append('All in ', h('span', { class: 'amt' }, fmt$(legal.callAmount)));
       }
       // opponents get impatient
       this.hurryT = setTimeout(() => { const s = this.rng.pick(this.seats.slice(1).filter((x) => x.stack > 0)); if (s) this.talk(s, 'hurry'); }, 14000);
@@ -534,8 +577,14 @@ export class HoldemTable {
       }
       if (s.stack <= 0) { this.talk(s, 'bustOut'); this.updateSeat(s); }
     }
-    if (humanWon && bigPot) { const s = this.rng.pick(this.seats.slice(1)); if (s) setTimeout(() => this.talk(s, 'playerWin', {}, 0.5), 900); }
-    if (humanNet < 0 && !humanWon) audio.play('lose', { volume: 0.4 });
+    // someone who was still in the hand and lost chips to you may have something to say about it (folded players stay quiet)
+    if (humanWon && bigPot) {
+      const losers = this.seats.slice(1).filter((s) => { const p = hand.players.find((x) => x.id === s.id); return p && !p.folded && (res.net[s.id] || 0) < 0; });
+      const s = losers.length ? this.rng.pick(losers) : null;
+      if (s) setTimeout(() => this.talk(s, 'playerWin', {}, 0.5), 900);
+    }
+    if (humanNet < 0 && !humanWon && !this.lossSoundPlayed) audio.play('lose', { volume: 0.4 });
+    this.lossSoundPlayed = false;
     await this.wait(1600);
   }
 

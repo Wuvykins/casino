@@ -1,8 +1,8 @@
 // The cribbage table: one opponent across from you, a board along the top, your cards big along the bottom.
 import { h, clear, sleep, modal, toast } from './dom.js';
-import { cardEl, chipStackEl, portraitEl, creditCardEl, chooseDeckBack, askLeave } from './components.js';
+import { cardEl, chipStackEl, portraitEl, creditCardEl, chooseDeckBack, askLeave, resultBanner } from './components.js';
 import { Game, scorePlay, chooseDiscard, choosePlay, pegValue, TARGET } from '../core/cribbage.js';
-import { cardKey, sameCard } from '../core/cards.js';
+import { RANK_LABEL, SUIT_GLYPH, cardKey, sameCard } from '../core/cards.js';
 import { makeRng } from '../core/rng.js';
 import { bank, fmt$ } from '../core/bank.js';
 import { assets } from '../core/assets.js';
@@ -17,9 +17,19 @@ const HUMAN = 'you';
 const BOARD_ART = {
   holeX: [11.085, 12.346, 13.608, 14.869, 16.13, 17.766, 19.027, 20.288, 21.55, 22.811, 24.446, 25.708, 26.969, 28.23, 29.491, 31.127, 32.388, 33.649, 34.911, 36.172, 37.807, 39.069, 40.33, 41.591, 42.852, 44.488, 45.749, 47.011, 48.272, 49.533, 51.169, 52.43, 53.691, 54.952, 56.214, 57.849, 59.11, 60.372, 61.633, 62.894, 64.53, 65.791, 67.052, 68.313, 69.575, 71.21, 72.472, 73.733, 74.994, 76.255, 77.891, 79.152, 80.413, 81.675, 82.936, 84.571, 85.833, 87.094, 88.355, 89.616],
   rowY: [26.5, 40.7, 59.3, 73.8],           // lane 0 top, lane 0 bottom, lane 1 top, lane 1 bottom
-  startX: 9.7,        // where the pegs sit at 0 (and 121)
+  startX: 9.85,       // the start holes drilled into the art before hole 1: top row = start, bottom row = second start / game hole (121)
   plate: { left: 1.2, width: 7.6, tops: [10, 50], height: 40 },   // name plates
   window: { left: 93.6, width: 5, tops: [14, 57], height: 29 },   // score windows
+};
+
+// Nic's cribbage SCENE (assets/img/table/felt-cribbage.jpg, the whole screen, board built in): the holes, measured
+// off the picture as % of the screen. Each row has 61 holes (0..60, evenly spaced). Lane 0 = rows 1+2, lane 1 = rows 3+4:
+// out along the top row of the pair (0 -> 60, left to right), back along the bottom row (60 -> 120, right to left).
+const SCENE = {
+  x0: 20.575, dx: 1.0569,                  // hole 0 and the spacing, % of width
+  rowY: [15.22, 18.04, 21.42, 24.24],       // lane 0 out, lane 0 back, lane 1 out, lane 1 back (% of height)
+  plate: { left: 9.7, width: 6.6, height: 5.2, tops: [14.0, 20.2] },   // name plates beside the pairs of rows
+  window: { left: 16.6, width: 3.5, height: 5.2, tops: [14.0, 20.2] },  // score windows
 };
 
 export class CribbageTable {
@@ -47,12 +57,14 @@ export class CribbageTable {
     clear(this.root);
     this.el = h('div', { class: 'table-screen crib' });
     this.topbar = h('div', { class: 'topbar table-top' },
-      h('button', { class: 'btn ghost small', onClick: () => this.requestLeave() }, '‹ Leave table'),
+      h('button', { class: 'btn ghost small leave-btn', onClick: () => this.requestLeave() }, '‹ Leave table'),
       h('div', { class: 'tt-title' }, this.table.name),
       h('div', { class: 'topbar-bank' }, 'Bank ', h('b', { class: 'bank-amt' }, fmt$(bank.state.bank))),
     );
     this.felt = h('div', { class: 'felt' });
-    assets.bg(this.felt, 'table.felt.cribbage') || assets.bg(this.felt, 'table.felt.holdem');
+    // Nic's scene is the whole screen with the board painted in; without it, the poker felt and a drawn board
+    this.scene = !!assets.bg(this.el, 'table.felt.cribbage');
+    if (this.scene) this.el.classList.add('scene'); else assets.bg(this.felt, 'table.felt.holdem');
     // board
     this.boardEl = h('div', { class: 'cb-board' });
     this.buildBoard();
@@ -73,10 +85,13 @@ export class CribbageTable {
     // you
     this.handEl = h('div', { class: 'cb-hand' });
     this.youPlate = h('div', { class: 'nameplate you' }, h('div', { class: 'pname' }, this.name), h('div', { class: 'pstack' }, fmt$(this.stack)));
-    this.felt.append(this.boardEl, this.oppEl, this.oppHand, this.msgEl, this.centerEl, this.deckEl, this.cribEl, this.dealerTag, this.handEl, this.youPlate);
+    this.oppHand.dataset.name = this.char.name;
+    this.felt.append(this.oppEl, this.oppHand, this.msgEl, this.centerEl, this.deckEl, this.cribEl, this.dealerTag, this.handEl, this.youPlate);
+    if (!this.scene) this.felt.prepend(this.boardEl);
     this.actionBar = h('div', { class: 'actionbar cb-actions hidden' });
     this.gearBtn = h('button', { class: 'gear-btn', title: 'Settings', onClick: () => { audio.play('tap'); showSettings(this.root, {}, { atTable: true }); } }, '⚙');
     this.el.append(this.topbar, this.felt, this.actionBar, this.gearBtn);
+    if (this.scene) this.el.append(this.boardEl);   // over the painted board (scene-board: in % of the whole screen; art: sized to cover it)
     this.root.append(this.el);
     this.unsubBank = bank.onChange(() => { const b = this.topbar.querySelector('.bank-amt'); if (b) b.textContent = fmt$(bank.state.bank); });
   }
@@ -87,8 +102,39 @@ export class CribbageTable {
     const lanes = [HUMAN, this.opp];
     this.laneOf = (id) => lanes.indexOf(id);
     this.scoreEls = {}; this.pegEls = {};
-    if (assets.bg(this.boardEl, 'table.crib.board')) { this.buildArtBoard(lanes); return; }
+    // Nic's own board art (cribbage-board.png, with his standing pegs) is the board even on the painted scene:
+    // it's laid over the board painted into the picture. The scene's own hole map is only used without it.
+    if (assets.bg(this.boardEl, 'table.crib.board')) { this.buildArtBoard(lanes); if (this.scene) this.boardEl.classList.add('on-scene'); return; }
+    if (this.scene) { this.buildSceneBoard(lanes); return; }
     this.buildSvgBoard(lanes);
+  }
+
+  buildSceneBoard(lanes) {
+    this.boardEl.classList.add('scene-board');
+    const S = SCENE;
+    const hx = (i) => S.x0 + S.dx * i;
+    this.plateFit = (id) => { const n = this.nameOf(id); return n.length > 7 ? n.slice(0, 7) : n; };
+    this.holePos = (lane, s) => {
+      const out = S.rowY[lane * 2], back = S.rowY[lane * 2 + 1];
+      if (s < 0) return { x: hx(-1), y: out };            // the start slot, before hole 0
+      if (s === 0) return { x: hx(0), y: out };
+      if (s <= 60) return { x: hx(s), y: out };
+      if (s <= 120) return { x: hx(120 - s), y: back };
+      return { x: hx(-1), y: back };                       // 121: the game hole, just past the end of the track
+    };
+    for (const id of lanes) {
+      const lane = this.laneOf(id);
+      const mk = (cls) => {
+        const p = h('div', { class: 'cb-peg ' + cls + (id === HUMAN ? ' you' : ' opp') });
+        if (!assets.bg(p, id === HUMAN ? 'table.crib.peg.you' : 'table.crib.peg.opp')) p.classList.add('placeholder');
+        const pos = this.holePos(lane, 0); p.style.left = pos.x + '%'; p.style.top = pos.y + '%';
+        this.boardEl.append(p); return p;
+      };
+      this.pegEls[id] = { back: mk('back'), front: mk('front') };
+      this.pegEls[id].back.style.left = hx(-1) + '%';       // the trailing peg waits in the start slot before hole 0
+      this.boardEl.append(h('div', { class: 'cb-plate' + (id === HUMAN ? ' you' : ' opp'), style: { left: S.plate.left + '%', width: S.plate.width + '%', top: S.plate.tops[lane] + '%', height: S.plate.height + '%' }, title: this.nameOf(id) }, this.nameOf(id)));
+      this.boardEl.append(this.scoreEls[id] = h('div', { class: 'cb-window' + (id === HUMAN ? ' you' : ' opp'), style: { left: S.window.left + '%', width: S.window.width + '%', top: S.window.tops[lane] + '%', height: S.window.height + '%' } }, '0'));
+    }
   }
 
   buildArtBoard(lanes) {
@@ -98,7 +144,8 @@ export class CribbageTable {
     // score -> position on the picture, in %
     this.holePos = (lane, s) => {
       const top = A.rowY[lane * 2], bot = A.rowY[lane * 2 + 1];
-      if (s <= 0) return { x: A.startX, y: top };
+      if (s < 0) return { x: A.startX, y: bot };          // the second start hole, under the first
+      if (s === 0) return { x: A.startX, y: top };
       if (s <= 60) return { x: A.holeX[Math.round((s - 1) / 59 * (n - 1))], y: top };
       if (s <= 120) return { x: A.holeX[n - 1 - Math.round((s - 61) / 59 * (n - 1))], y: bot };
       return { x: A.startX, y: bot };
@@ -112,6 +159,7 @@ export class CribbageTable {
         this.boardEl.append(p); return p;
       };
       this.pegEls[id] = { back: mk('back'), front: mk('front') };
+      this.pegEls[id].back.style.left = this.holePos(lane, -1).x + '%';
       this.boardEl.append(h('div', { class: 'cb-plate' + (id === HUMAN ? ' you' : ' opp'), style: { left: A.plate.left + '%', width: A.plate.width + '%', top: A.plate.tops[lane] + '%', height: A.plate.height + '%' } }, this.nameOf(id)));
       this.boardEl.append(this.scoreEls[id] = h('div', { class: 'cb-window' + (id === HUMAN ? ' you' : ' opp'), style: { left: A.window.left + '%', width: A.window.width + '%', top: A.window.tops[lane] + '%', height: A.window.height + '%' } }, '0'));
     }
@@ -169,7 +217,7 @@ export class CribbageTable {
       const lane = this.laneOf(id);
       const f = this.holePos(lane, front); let b = this.holePos(lane, back);
       // never stack the two pegs on one hole
-      for (let k = 1; k <= 3 && b.x === f.x && b.y === f.y && back - k >= 0; k++) b = this.holePos(lane, back - k);
+      for (let k = 1; k <= 3 && b.x === f.x && b.y === f.y && back - k >= -1; k++) b = this.holePos(lane, back - k);
       const put = (el, p) => { if (el instanceof SVGElement) { el.setAttribute('cx', p.x); el.setAttribute('cy', p.y); } else { el.style.left = p.x + '%'; el.style.top = p.y + '%'; } };
       put(this.pegEls[id].front, f); put(this.pegEls[id].back, b);
       this.scoreEls[id].textContent = String(game.scores[id]);
@@ -192,14 +240,32 @@ export class CribbageTable {
   }
   showButtons(...btns) { clear(this.actionBar); this.actionBar.classList.remove('hidden'); this.actionBar.append(...btns); }
   hideButtons() { this.actionBar.classList.add('hidden'); clear(this.actionBar); }
-  waitButton(label, cls = 'raise') {
-    return new Promise((resolve) => this.showButtons(h('button', { class: 'act ' + cls, onClick: () => { audio.play('tap'); this.hideButtons(); resolve(); } }, label)));
+  // Shows one button and waits for it. `alsoTap` = other elements that count as pressing it (e.g. the count panel).
+  // Between hands: a big gold Deal in the middle of the empty felt (the corner button on the plain table).
+  waitDeal() {
+    if (!this.scene) return this.waitButton('Deal');
+    return new Promise((resolve) => {
+      const btn = h('button', { class: 'act raise cb-deal-mid', onClick: () => { audio.play('tap'); btn.remove(); resolve(); } }, 'Deal');
+      this.felt.append(btn);
+      requestAnimationFrame(() => btn.classList.add('show'));
+    });
+  }
+  waitButton(label, cls = 'raise', alsoTap = []) {
+    return new Promise((resolve) => {
+      const go = () => { audio.play('tap'); this.hideButtons(); for (const el of alsoTap) { el.removeEventListener('click', go); el.classList.remove('tappable'); } resolve(); };
+      this.showButtons(h('button', { class: 'act ' + cls, onClick: go }, label));
+      for (const el of alsoTap) { el.addEventListener('click', go); el.classList.add('tappable'); }
+    });
   }
   pointsPop(id, points, reason) {
-    const pop = h('div', { class: 'cb-points' + (id === HUMAN ? ' you' : ' opp') }, `${reason} for ${points}`);
+    const mine = id === HUMAN;
+    const pop = h('div', { class: 'cb-points' + (mine ? ' you' : ' opp') },
+      h('span', { class: 'who' }, mine ? 'YOUR POINTS' : `${this.char.name.toUpperCase()}'S POINTS`),
+      h('span', { class: 'pts' }, `+${points}`),
+      h('span', { class: 'why' }, reason));
     this.felt.append(pop);
     requestAnimationFrame(() => pop.classList.add('show'));
-    setTimeout(() => { pop.classList.remove('show'); setTimeout(() => pop.remove(), 300); }, 1500);
+    setTimeout(() => { pop.classList.remove('show'); setTimeout(() => pop.remove(), 300); }, 1900);
   }
 
   // ---------- main loop ----------
@@ -227,12 +293,12 @@ export class CribbageTable {
     this.stakeNote(game);
     await this.wait(400);
     this.say(`${this.nameOf(dealer)} deal${dealer === HUMAN ? '' : 's'} first.`);
-    await this.waitButton('Deal');
+    await this.waitDeal();
     while (game.phase !== 'over' && !this.stopped) {
       await this.playHand(game);
       if (this.stopped || game.phase === 'over') break;
       if (this.leaving) { this.say('Finishing the game, then we go.'); }
-      await this.waitButton('Deal');
+      await this.waitDeal();
     }
     if (this.stopped) return;
     await this.gameOver(game);
@@ -377,8 +443,16 @@ export class CribbageTable {
   renderCrib(game) {
     clear(this.cribEl);
     const n = game.crib.length;
-    for (let i = 0; i < n; i++) { const b = cardEl(null, { faceDown: true, small: true }); b.style.setProperty('--i', i); this.cribEl.append(b); }
-    this.cribEl.append(h('div', { class: 'cb-crib-label' }, 'Crib'));
+    const lbl = h('div', { class: 'cb-crib-label' }, game.dealer ? `${this.poss(game.dealer, true)} crib` : 'Crib');
+    if (this.scene) {
+      // painted table: label above a little fanned stack
+      const stack = h('div', { class: 'cb-crib-stack' });
+      for (let i = 0; i < n; i++) { const b = cardEl(null, { faceDown: true, small: true }); b.style.setProperty('--i', i); stack.append(b); }
+      if (n) this.cribEl.append(lbl, stack);
+    } else {
+      for (let i = 0; i < n; i++) { const b = cardEl(null, { faceDown: true, small: true }); b.style.setProperty('--i', i); this.cribEl.append(b); }
+      this.cribEl.append(lbl);
+    }
   }
 
   // ---------- human input ----------
@@ -421,40 +495,79 @@ export class CribbageTable {
 
   // ---------- the show: count a hand out loud ----------
   async showHand(game, s) {
+    // Nic's fixed count panel: the cards on the left with ONE line describing the combination being counted (it
+    // replaces itself, so the panel never grows), the running total anchored on the right. 800 ms per combination,
+    // the total ticks up 200 ms in. When it's done, the left says how many combinations there were and the right
+    // shows a short category summary (Fifteens ×7 14 / Pairs ×3 6). "Show breakdown" lists every combination.
     const title = s.who === 'crib' ? `${this.poss(s.playerId)} crib` : `${this.poss(s.playerId)} hand`;
     const cardsRow = h('div', { class: 'cb-show-cards' });
     const sorted = s.cards.slice().sort((a, b) => runRankForSort(a) - runRankForSort(b) || a.s - b.s);
     const els = sorted.map((c) => { const el = cardEl(c); el.dataset.key = cardKey(c); cardsRow.append(el); return el; });
     const stEl = cardEl(game.starter); stEl.classList.add('starter'); stEl.dataset.key = cardKey(game.starter); cardsRow.append(stEl);
-    const list = h('div', { class: 'cb-show-list' });
-    const totalEl = h('div', { class: 'cb-show-total' }, '0');
-    const panel = h('div', { class: 'cb-show' }, h('div', { class: 'cb-show-title' }, title), cardsRow, list, totalEl);
+    const name = (c) => RANK_LABEL[c.r] + SUIT_GLYPH[c.s];
+    const items = s.items;
+    const n = items.length;
+    const expr = h('div', { class: 'cs-expr' }, n ? 'Ready to count' : (s.who === 'crib' ? 'Nothing in the crib' : 'Nineteen'));
+    const note = h('div', { class: 'cs-note' }, n ? 'Watch the highlighted cards' : 'No scoring combinations');
+    const dots = h('div', { class: 'cs-dots' });   // one dot per combination, added as each lands
+    const left = h('div', { class: 'cs-left' }, h('div', { class: 'cs-title' }, title), cardsRow, expr, note, dots);
+    const cap = h('div', { class: 'cs-cap' }, 'COUNTING');
+    const label = h('div', { class: 'cs-label' }, n ? 'Counting soon' : 'Nothing');
+    const step = h('div', { class: 'cs-step' }, '');
+    const totalEl = h('div', { class: 'cs-total' }, '0');
+    const summary = h('div', { class: 'cs-summary' });
+    const right = h('div', { class: 'cs-right' }, cap, label, step, summary, totalEl, h('div', { class: 'cs-pts' }, 'POINTS'));
+    const foot = h('div', { class: 'cs-foot' }, '0 scoring combinations counted');
+    const breakdownBtn = h('button', { class: 'cs-break' }, 'Show breakdown');
+    const breakdown = h('div', { class: 'cs-breakdown' });
+    const panel = h('div', { class: 'cb-show cs' }, left, right, foot, breakdownBtn, breakdown);
+    for (const old of this.felt.querySelectorAll('.cb-points')) old.remove();   // a lingering pegging pop would sit on the panel
     this.felt.append(panel);
     requestAnimationFrame(() => panel.classList.add('show'));
     audio.play('flip');
-    await this.wait(600);
-    let running = 0;
-    if (!s.items.length) { list.append(h('div', { class: 'cb-show-item' }, s.who === 'crib' ? 'Nothing in the crib.' : 'Nineteen — nothing.')); await this.wait(900); }
-    // group identical names so it reads "Fifteen 2, fifteen 4, pair 6, run of 3 for 9"
-    for (const it of s.items) {
-      running += it.points;
-      for (const el of [...els, stEl]) el.classList.toggle('hl', it.cards.some((c) => cardKey(c) === el.dataset.key));
-      list.append(h('div', { class: 'cb-show-item' }, `${it.name} ${running}`));
-      totalEl.textContent = String(running);
+    await this.wait(800);
+    let running = 0, credited = 0;
+    for (let i = 0; i < n; i++) {
+      const it = items[i];
+      const on = new Set((it.cards || []).map(cardKey));
+      for (const el of [...els, stEl]) { el.classList.toggle('hl', on.has(el.dataset.key)); el.classList.toggle('dim', on.size > 0 && !on.has(el.dataset.key)); }
+      expr.textContent = it.cards?.length ? it.cards.map(name).join(' + ') : it.name;
+      note.textContent = it.name === 'Fifteen' ? 'These cards total 15' : it.name === 'Pair' ? 'These cards make a pair' : it.name.startsWith('Run') ? 'These cards run in sequence' : it.name === 'Flush' ? 'All one suit' : it.name === 'His nobs' ? 'Jack of the starter\u2019s suit' : `${it.name} scores ${it.points}`;
+      label.textContent = `${it.name} for ${it.points}`; label.classList.remove('in'); void label.offsetWidth; label.classList.add('in');
+      step.textContent = `Combination ${i + 1}`;   // no total ahead of time — that's the fun part
+      await this.wait(200);
+      running += it.points; credited++;
+      totalEl.textContent = String(running); totalEl.classList.remove('pulse'); void totalEl.offsetWidth; totalEl.classList.add('pulse');
+      dots.append(h('i', { class: 'on' }));
+      foot.textContent = `${credited} scoring combination${credited === 1 ? '' : 's'} counted`;
       audio.play('chip');
-      await this.wait(650);
+      await this.wait(600);
     }
-    for (const el of [...els, stEl]) el.classList.remove('hl');
-    totalEl.textContent = s.total ? `${s.total} points` : 'No points';
+    for (const el of [...els, stEl]) el.classList.remove('hl', 'dim');
+    // done
+    panel.classList.add('done');
+    cap.textContent = 'HAND TOTAL';
+    expr.textContent = n ? 'All combinations counted' : (s.who === 'crib' ? 'Nothing in the crib' : 'Nineteen \u2014 nothing');
+    note.textContent = n ? `${n} scoring combination${n === 1 ? '' : 's'}` : 'No points this time';
+    foot.textContent = 'Counting complete';
+    const cats = new Map();
+    for (const it of items) { const k = it.name === 'Fifteen' ? 'Fifteens' : it.name === 'Pair' ? 'Pairs' : it.name.startsWith('Run') ? 'Runs' : it.name; const c = cats.get(k) || { count: 0, points: 0 }; c.count++; c.points += it.points; cats.set(k, c); }
+    for (const [k, v] of cats) summary.append(h('div', { class: 'cs-cat' }, h('span', {}, `${k} \u00d7${v.count}`), h('b', {}, String(v.points))));
+    totalEl.textContent = String(s.total);
+    if (n) {
+      // the full list, two columns, ten per page
+      items.forEach((it) => breakdown.append(h('div', { class: 'cs-row' }, h('span', {}, it.cards?.length ? it.cards.map(name).join(' + ') : it.name), h('b', {}, '+' + it.points))));
+      breakdownBtn.addEventListener('click', (e) => { e.stopPropagation(); audio.play('tap'); const on = panel.classList.toggle('breakdown'); breakdownBtn.textContent = on ? 'Back to cards' : 'Show breakdown'; });
+    } else breakdownBtn.remove();
     if (s.playerId === this.opp) {
       if (s.who === 'crib') { if (s.total >= 8) this.talk('cribGoodCrib'); else if (s.total <= 1) this.talk('cribBadCrib'); }
       else if (s.total >= 12) this.talk('cribGoodHand'); else if (s.total === 0) this.talk('cribBadHand');
     } else if (s.who !== 'crib' && s.total <= 2) this.talk('tauntCribbage', {}, 0.35);
-    await this.wait(700);
+    await this.wait(600);
     // apply the points on the board now (engine already added them)
     this.updatePegs(game);
     if (s.total) this.pointsPop(s.playerId, s.total, s.who === 'crib' ? 'Crib' : 'Hand');
-    await this.waitButton(s.who === 'crib' ? 'Done' : 'Next', 'call');
+    await this.waitButton(s.who === 'crib' ? 'Done' : 'Next', 'call', [panel]);   // tapping the panel moves on too
     panel.classList.remove('show'); setTimeout(() => panel.remove(), 250);
   }
 
@@ -473,8 +586,8 @@ export class CribbageTable {
     if (humanWon) this.talk(r.skunk ? 'cribGotSkunked' : 'cribGameLose'); else this.talk(r.skunk ? 'cribSkunked' : 'cribGameWin');
     bank.recordHand({ won: humanWon, showdown: false, pot: amount, net: humanWon ? amount : -amount, handName: humanWon && r.skunk ? (r.skunk === 2 ? 'Double skunk' : 'Skunk') : null, handScore: humanWon ? r.skunk : 0 });
     bank.setAtTable({ tableId: this.table.id, stack: this.stack, opponents: [this.opp] });
-    if (humanWon) { audio.play(r.skunk ? 'bigwin' : 'win'); await this.wait(300); await this.winBanner(amount, label, !!r.skunk); }
-    else { audio.play('lose', { volume: 0.4 }); await this.wait(1200); }
+    if (humanWon) { audio.play(r.skunk ? 'bigwin' : 'win'); await this.wait(300); if (r.skunk) await this.winBanner(amount, label, true); else await resultBanner(this.el, { type: 'win', amount, caption: '\u2660   GAME WON   \u2660', hold: 2600 }); }
+    else { audio.play('lose', { volume: 0.4 }); await this.wait(300); await resultBanner(this.el, { type: 'lose', amount: -amount, title: `${this.char.name} wins`, caption: label ? label.toUpperCase().replace('!', '') : 'GAME OVER', hold: 2600 }); }
     const choice = await modal({
       title: humanWon ? 'You won!' : `${this.char.name} won`, dismissable: false,
       body: (el) => el.append(

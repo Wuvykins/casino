@@ -4,7 +4,7 @@
 import { assets, probeAudio } from './assets.js';
 import { bank } from './bank.js';
 
-export const SFX = ['tap', 'chip', 'chips', 'deal', 'flip', 'check', 'call', 'raise', 'fold', 'win', 'bigwin', 'lose', 'allin', 'tierup', 'tierdown', 'bailout', 'shuffle', 'yourturn', 'dice'];
+export const SFX = ['tap', 'chip', 'chips', 'deal', 'flip', 'check', 'call', 'raise', 'fold', 'win', 'bigwin', 'lose', 'allin', 'tierup', 'tierdown', 'bailout', 'shuffle', 'yourturn', 'dice', 'slotspin', 'slotreels', 'slotwin', 'slotmiss', 'slotclunk', 'slotsmall', 'slotstop', 'slotteacher', 'slotjackpot'];
 
 let ctx = null;
 const fileSfx = new Map();
@@ -31,9 +31,10 @@ export const audio = {
   play(key, opts = {}) {
     if (!this.enabled) return;
     const file = fileSfx.get(key);
-    if (file) { const a = new Audio(file); a.volume = opts.volume ?? 0.8; a.play().catch(() => {}); return; }
-    if (!ctx || !unlocked) return;
+    if (file) { const a = new Audio(file); a.volume = opts.volume ?? 0.8; a.play().catch(() => {}); return a; }
+    if (!ctx || !unlocked) return null;
     try { synth[key]?.(ctx, opts); } catch { /* ignore */ }
+    return null;
   },
 
   // Play a recorded line: assets/voice/<characterId>/<file>. Returns true if a clip was started.
@@ -57,6 +58,7 @@ const TABLE_MUFFLE = 1400; // lowpass cutoff (Hz) at a table; 20000 = wide open 
 const ROOM_LEVEL = 0.4;    // room sound relative to the music volume setting
 const SONG_GAP = 3000;     // ms of quiet between songs
 let playlist = [], queue = [], lastTrack = null;
+const titles = new Map();  // file name -> { title, artist } from setlist.json
 let track = null;          // { el, gain, filter }
 let room = null;           // { el, gain }
 let ducked = false;
@@ -94,10 +96,13 @@ function stopNode(node, ms) {
   rampGain(node, 0, ms);
   setTimeout(() => { try { node.el.pause(); node.el.removeAttribute('src'); node.el.load(); } catch { /* ignore */ } }, ms + 60);
 }
+// the songs switched on in the Setlist editor (settings.setlistOff holds the file names that are off)
+function activeList() { const off = new Set(bank.state?.settings?.setlistOff || []); return playlist.filter((u) => !off.has(u.split('/').pop())); }
 function nextTrack() {
-  if (!playlist.length) return null;
-  if (!queue.length) {                      // reshuffle; don't repeat the song that just ended
-    queue = playlist.slice();
+  const active = activeList();
+  if (!active.length) return null;
+  if (!queue.length || queue.some((u) => !active.includes(u))) {   // reshuffle (or the setlist changed); don't repeat the song that just ended
+    queue = active.slice();
     for (let i = queue.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [queue[i], queue[j]] = [queue[j], queue[i]]; }
     if (queue.length > 1 && queue[0] === lastTrack) queue.push(queue.shift());
   }
@@ -108,13 +113,15 @@ const roomLevel = () => audio.musicVolume * ROOM_LEVEL;
 export const music = {
   async init() {
     // playlist: assets/music/song-1.mp3, song-2.mp3, ... (stops at the first missing number)
-    for (let n = 1; n <= 20; n++) {
+    for (let n = 1; n <= 60; n++) {
       let found = null;
       for (const ext of ['mp3', 'm4a']) { const url = assets.fileUrl(`music/song-${n}.${ext}`); if (await probeAudio(url)) { found = url; break; } }
       if (!found) break;
       playlist.push(found);
     }
     if (playlist.length) musicFiles.set('lobby', playlist[0]);
+    // titles for the Setlist editor: assets/music/setlist.json = [{ file: 'song-1.mp3', title, artist }]
+    try { const r = await fetch(assets.fileUrl('music/setlist.json'), { cache: 'no-cache' }); if (r.ok) for (const row of await r.json()) titles.set(row.file, row); } catch { /* no manifest: numbered songs */ }
     const roomUrl = assets.fileUrl('music/lobby-room.mp3');
     if (await probeAudio(roomUrl)) musicFiles.set('room', roomUrl);
     // iOS won't start audio until the first tap: retry anything that's meant to be playing on the next gesture
@@ -124,6 +131,29 @@ export const music = {
   get roomEnabled() { return bank.state?.settings?.roomSound !== false; },
   get roomWanted() { return !ducked && this.roomEnabled && audio.musicEnabled && musicFiles.has('room'); },
   has(key) { return musicFiles.has(key); },
+  // every song the game found, for the Setlist editor
+  get songs() { const off = new Set(bank.state?.settings?.setlistOff || []); return playlist.map((url, i) => { const file = url.split('/').pop(); const t = titles.get(file) || {}; return { url, file, title: t.title || `Song ${i + 1}`, artist: t.artist || '', on: !off.has(file), playing: !!track && track.el.src.endsWith('/' + file) }; }); },
+  get nowPlaying() { if (!track) return null; const file = track.el.src.split('/').pop(); const t = titles.get(file) || {}; return t.title || file; },
+  setSongOn(file, on) {
+    const off = new Set(bank.state.settings.setlistOff || []);
+    if (on) off.delete(file); else off.add(file);
+    bank.setSetting('setlistOff', [...off]);
+    queue = [];                                                          // rebuild the shuffle from the new list
+    if (track && !on && track.el.src.endsWith('/' + file)) this.skip();   // switched off the one that's playing: move on
+    else if (!track && on && this.key) { const k = this.key; this.key = null; this.play(k); }   // the floor was quiet: start it up
+  },
+  // play this one now (from the Setlist editor)
+  playSong(url) {
+    if (!audio.musicEnabled) return false;
+    const file = url.split('/').pop();
+    const off = bank.state.settings.setlistOff || [];
+    if (off.includes(file)) bank.setSetting('setlistOff', off.filter((f) => f !== file));   // playing it switches it back on
+    const k = this.key || 'lobby';
+    this.stop(250); this.key = null;
+    queue = [url, ...activeList().filter((u) => u !== url).sort(() => Math.random() - 0.5)];
+    this.play(k);
+    return true;
+  },
   debug() { return { track: track ? track.el.src.split('/').pop() + ' ' + (track.el.paused ? 'paused' : 'playing') + (track.filter ? ` lp ${Math.round(track.filter.frequency.value)}` : '') + ` gain ${track.gain?.gain.value.toFixed(2)}` : null, room: room ? (room.el.paused ? 'paused' : 'playing') + ` gain ${room.gain?.gain.value.toFixed(2)}` : null, ducked }; },
   key: null,
   play(key) {
@@ -131,7 +161,8 @@ export const music = {
     this.stop(300);
     this.key = key;
     if (!playlist.length || !audio.musicEnabled) return;
-    const url = nextTrack(); lastTrack = url;
+    const url = nextTrack(); if (!url) return;   // every song is switched off in the Setlist: the floor stays quiet (key stays set, so switching one on starts it)
+    lastTrack = url;
     const el = new Audio(url); el.preload = 'auto';
     const node = wire(el, { filtered: true });
     if (node.filter) node.filter.frequency.value = ducked ? TABLE_MUFFLE : 20000;
@@ -223,4 +254,12 @@ const synth = {
   shuffle: (c) => { for (let i = 0; i < 8; i++) noise(c, { t: 0.03, vol: 0.06, hp: 2500, at: i * 0.04 }); },
   yourturn: (c) => synth.tap(c),
   dice: (c) => { for (let i = 0; i < 6; i++) noise(c, { t: 0.04, vol: 0.12, hp: 1200, at: i * 0.06 + Math.random() * 0.02 }); },
+  slotspin: (c) => { for (let i = 0; i < 24; i++) tone(c, { f: 500 + (i % 3) * 40, t: 0.03, type: 'square', vol: 0.04, at: 0.9 + i * 0.12 }); },
+  slotwin: (c) => [523, 659, 784, 1047].forEach((f, i) => tone(c, { f, t: 0.18, at: 3.9 + i * 0.1, vol: 0.12 })),
+  slotmiss: (c) => tone(c, { f: 200, t: 0.2, type: 'triangle', vol: 0.06, at: 3.9 }),
+  slotstop: (c) => synth.tap(c),
+  slotreels: () => {},
+  slotsmall: (c) => synth.chips(c),
+  slotclunk: (c) => tone(c, { f: 200, t: 0.2, type: 'triangle', vol: 0.06 }),
+  slotjackpot: (c) => [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(c, { f, t: 0.25, at: i * 0.12, vol: 0.14 })),
 };

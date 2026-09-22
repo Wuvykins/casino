@@ -12,6 +12,8 @@ import { renderCribbageSelect } from './ui/cribbageSelect.js';
 import { CribbageTable } from './ui/cribbageTable.js';
 import { renderFarkleSelect } from './ui/farkleSelect.js';
 import { FarkleTable } from './ui/farkleTable.js';
+import { renderSlotsSelect } from './ui/slotsSelect.js';
+import { SlotsTable } from './ui/slotsTable.js';
 
 const root = $('#app');
 let current = null;
@@ -20,7 +22,7 @@ function goLobby() {
   current = null;
   music.play('lobby');
   music.duck(false);
-  renderLobby(root, { onEnter: (gameId) => { if (gameId === 'holdem') goHoldemSelect(); else if (gameId === 'blackjack') goBlackjackSelect(); else if (gameId === 'cribbage') goCribbageSelect(); else if (gameId === 'farkle') goFarkleSelect(); } });
+  renderLobby(root, { onEnter: (gameId) => { if (gameId === 'holdem') goHoldemSelect(); else if (gameId === 'blackjack') goBlackjackSelect(); else if (gameId === 'cribbage') goCribbageSelect(); else if (gameId === 'farkle') goFarkleSelect(); else if (gameId === 'slots') goSlotsSelect(); } });
 }
 function goHoldemSelect() {
   music.duck(true); // keeps playing, much quieter, all the way through the game
@@ -100,6 +102,17 @@ function playIntro(splash) {
     video.play().then(() => { if (!started) start(); }).catch(() => { if (!started) splash.classList.add('gate'); });
   });
   return { done, loaded() { loadedFlag = true; hurry(); } };
+}
+
+function goSlotsSelect() {
+  music.duck(true);
+  renderSlotsSelect(root, {
+    onBack: goLobby,
+    onSit: (table, buyIn) => {
+      current = new SlotsTable(root, table, buyIn, { onLeave: goLobby });
+      current.run().catch((err) => { console.error(err); goLobby(); });
+    },
+  });
 }
 
 async function boot() {

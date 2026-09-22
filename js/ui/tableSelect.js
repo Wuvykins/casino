@@ -13,7 +13,7 @@ export function renderTableSelect(root, opts) {
   const tier = bank.tier;
   const screen = h('div', { class: 'select-screen' });
   screen.append(h('div', { class: 'topbar' },
-    h('button', { class: 'btn ghost', onClick: () => { audio.play('tap'); opts.onBack(); } }, '‹ Lobby'),
+    h('button', { class: 'btn ghost leave-btn', onClick: () => { audio.play('tap'); opts.onBack(); } }, '‹ Lobby'),
     h('h2', {}, opts.title),
     h('div', { class: 'topbar-bank' }, 'Bank ', h('b', {}, fmt$(s.bank)), ' · ', tierBadge(tier)),
   ));
@@ -46,7 +46,7 @@ async function chooseBuyIn(root, table, opts) {
   const max = Math.min(table.maxBuy, s.bank);
   const min = table.minBuy;
   let amount = Math.min(max, Math.max(min, Math.round(table.maxBuy / 2 / step) * step));
-  let opponents = pickDefault(maxOpp);
+  let opponents = maxOpp === 0 ? [] : pickDefault(maxOpp);
   const result = await modal({
     title: table.name, className: 'wide', dismissable: true,
     body: (el, close) => {
@@ -78,7 +78,7 @@ async function chooseBuyIn(root, table, opts) {
             h('div', { class: 'muted small' }, 'Buy-in · bank ' + fmt$(s.bank)), amountEl, slider, presets,
             h('div', { class: 'modal-buttons', style: { justifyContent: 'flex-start' } }, h('button', { class: 'btn ghost', onClick: () => close(null) }, 'Back'), sitBtn),
           ),
-          h('div', {},
+          maxOpp === 0 ? h('div', { class: 'muted' }, opts.soloNote || '') : h('div', {},
             h('div', { class: 'row space' }, h('h3', { style: { margin: 0 } }, opts.whoLabel || "Who's playing?"), countEl, h('button', { class: 'btn ghost small', onClick: () => { opponents = pickDefault(maxOpp); refreshGrid(); } }, 'Shuffle')),
             grid,
           ),

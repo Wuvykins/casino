@@ -41,8 +41,12 @@ export const FARKLE_TABLES = [
   { id: 'fk-5000', game: 'farkle', name: 'Farkle $5,000 a game', stake: 5000, minBuy: 15000, maxBuy: 100000, tier: 5 },
 ];
 
+export const SLOT_TABLES = [
+  { id: 'slots-vh', game: 'slots', name: 'Van Halen · Hot for Jackpot', minBet: 1, maxBet: 100, minBuy: 20, maxBuy: 2000, tier: 1, bets: [1, 2, 5, 10, 25, 50, 100] },
+];
+
 export const MAX_SEATS = 6; // you + up to 5 opponents
 
-const ALL = () => [...HOLDEM_TABLES, ...BLACKJACK_TABLES, ...CRIBBAGE_TABLES, ...FARKLE_TABLES];
+const ALL = () => [...HOLDEM_TABLES, ...BLACKJACK_TABLES, ...CRIBBAGE_TABLES, ...FARKLE_TABLES, ...SLOT_TABLES];
 export function cheapestBuyIn() { return Math.min(...ALL().map((t) => t.minBuy)); }
 export function tableById(id) { return ALL().find((t) => t.id === id); }

@@ -1,6 +1,6 @@
 // The farkle table: one to three of the family across from you, six big dice in the middle.
 import { h, clear, sleep, modal, toast } from './dom.js';
-import { chipStackEl, portraitEl, creditCardEl, askLeave } from './components.js';
+import { chipStackEl, portraitEl, creditCardEl, askLeave, resultBanner } from './components.js';
 import { Game, scoreSelection, chooseKeep, shouldBank, bestKeep, TARGET, ENTRY } from '../core/farkle.js';
 import { makeRng } from '../core/rng.js';
 import { bank, fmt$ } from '../core/bank.js';
@@ -41,7 +41,7 @@ export class FarkleTable {
     clear(this.root);
     this.el = h('div', { class: 'table-screen fk' });
     this.topbar = h('div', { class: 'topbar table-top' },
-      h('button', { class: 'btn ghost small', onClick: () => this.requestLeave() }, '‹ Leave table'),
+      h('button', { class: 'btn ghost small leave-btn', onClick: () => this.requestLeave() }, '‹ Leave table'),
       h('div', { class: 'tt-title fk-title' }, h('b', {}, 'FARKLE'), h('small', {}, `${fmt$(this.table.stake)} a game · First to ${fmtN(TARGET)}`)),
       h('button', { class: 'btn ghost small', onClick: () => { audio.play('tap'); this.showRules(); } }, 'Rules'),
       h('div', { class: 'topbar-bank' }, 'Bank ', h('b', { class: 'bank-amt' }, fmt$(bank.state.bank))),
@@ -366,8 +366,8 @@ export class FarkleTable {
     if (humanWon) { for (const c of this.opps) this.talk(c.id, 'cribGameLose', {}, 0.5); } else this.talk(r.winner, 'cribGameWin', {}, 0.9);
     bank.recordHand({ won: humanWon, showdown: false, pot, net: humanWon ? amount : -amount, handName: null, handScore: 0 });
     bank.setAtTable({ tableId: this.table.id, stack: this.stack, opponents: this.opps.map((c) => c.id) });
-    if (humanWon) { audio.play(this.opps.length > 1 ? 'bigwin' : 'win'); await this.wait(300); await this.winBanner(amount, this.opps.length > 1); }
-    else { audio.play('lose', { volume: 0.4 }); await this.wait(1200); }
+    if (humanWon) { audio.play(this.opps.length > 1 ? 'bigwin' : 'win'); await this.wait(300); if (this.opps.length > 1) await this.winBanner(amount, true); else await resultBanner(this.el, { type: 'win', amount, caption: '\u2684   GAME WON   \u2684', hold: 2600 }); }
+    else { audio.play('lose', { volume: 0.4 }); await this.wait(300); await resultBanner(this.el, { type: 'lose', amount: -amount, title: `${this.nameOf(r.winner)} wins`, caption: 'GAME OVER', hold: 2600 }); }
     const choice = await modal({
       title: humanWon ? 'You won!' : `${this.nameOf(r.winner)} won`, dismissable: false,
       body: (el) => el.append(

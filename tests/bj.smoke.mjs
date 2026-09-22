@@ -83,6 +83,7 @@ while (Date.now() - t0 < 180000) {
     continue;
   }
   if (!seen.has('win') && await page.$('.win-banner.show')) { seen.add('win'); await page.screenshot({ path: 'tests/shots/bj-win.png' }); }
+  { const rb = await page.$('.rb.in:not(.out)'); if (rb) { const t = await rb.evaluate((e) => [...e.classList].find((c) => ['win','lose','bust','push'].includes(c))); if (t && !seen.has('rb-' + t)) { seen.add('rb-' + t); await page.waitForTimeout(450); await page.screenshot({ path: `tests/shots/rb-${t}.png` }); } } }
   if (!seen.has('tag') && await page.$('.bj-seat.human .bj-hand-tag.show')) { seen.add('tag'); await page.screenshot({ path: 'tests/shots/bj-result.png' }); }
   const tierBtn = await page.$('.tier-change button');
   if (tierBtn) { await tierBtn.click(); continue; }

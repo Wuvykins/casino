@@ -50,13 +50,14 @@ while (Date.now() - t0 < 420000) {
   if (await page.$('.lobby')) break;
   const again = await page.$('.modal button:has-text("Play again")');
   if (again) { games++; await shot('gameover'); if (games >= GAMES) { await page.click('.modal button:has-text("Leave table")'); leaveClicked = true; } else await again.click(); continue; }
+  const mid = await page.$('.cb-deal-mid.show'); if (mid) { if (games === 0 && discards === 0) await shot('start'); await mid.click(); await page.waitForTimeout(150); continue; }
   const bar = await page.$('.actionbar:not(.hidden) button.act:not([disabled])');
   if (bar) {
     const label = await bar.innerText();
     if (/Pick/.test(label)) { /* need to select cards first */ }
     else {
       if (/Send/.test(label)) { discards++; await shot('discard'); }
-      if (/Next|Done/.test(label)) { shows++; await shot('show'); }
+      if (/Next|Done/.test(label)) { shows++; await shot('show'); if (await page.$('.cb-points.you.show')) await shot('points'); }
       if (/Deal/.test(label) && games === 0 && discards === 0) await shot('start');
       await bar.click(); await page.waitForTimeout(150); continue;
     }

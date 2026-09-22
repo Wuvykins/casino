@@ -1,6 +1,6 @@
 // The blackjack table: dealer up top, you in the middle seat, up to two of the family beside you.
 import { h, clear, sleep, modal, toast } from './dom.js';
-import { cardEl, chipStackEl, portraitEl, creditCardEl, chooseDeckBack, CHIP_DENOMS, askLeave } from './components.js';
+import { cardEl, chipStackEl, portraitEl, creditCardEl, chooseDeckBack, CHIP_DENOMS, askLeave, resultBanner } from './components.js';
 import { Shoe, Round, handValue, isBlackjack, aiDecide, cardValue } from '../core/blackjack.js';
 import { makeRng } from '../core/rng.js';
 import { LUCK, bjLuckyDeal, bjLuckyHit, bjDealerBusts } from '../core/luck.js';
@@ -12,8 +12,33 @@ import { pickLine } from '../content/lines.js';
 import { showSettings } from './lobby.js';
 
 const HUMAN = 'you';
+// Hand-total badge (Nic's hit-total design): a dark plate with a gold rim. When the number changes the old one
+// slides up and fades while the new one rises in (220 ms), and the rim glows for 0.7 s. 21 turns bright gold with
+// a "21" caption; a bust turns red, shakes, and says "BUST". Empty text hides the badge.
+function setTotalBadge(el, text, { bust = false, win = false } = {}) {
+  if (!el) return;
+  if (!el.firstChild) el.append(h('span', { class: 'tb-old' }), h('span', { class: 'tb-num' }), h('span', { class: 'tb-cap' }));
+  const num = el.querySelector('.tb-num'), old = el.querySelector('.tb-old'), cap = el.querySelector('.tb-cap');
+  const prev = num.textContent;
+  if (!text) { el.classList.remove('show', 'bust', 'win', 'change'); num.textContent = ''; old.textContent = ''; cap.textContent = ''; return; }
+  el.classList.add('show');
+  el.classList.toggle('bust', bust); el.classList.toggle('win', win && !bust);
+  cap.textContent = bust ? 'BUST' : win ? '21' : '';
+  if (text === prev) return;
+  num.textContent = text;
+  if (prev) {
+    old.textContent = prev;
+    el.classList.remove('change'); void el.offsetWidth; el.classList.add('change');
+    setTimeout(() => { if (old.textContent === prev) old.textContent = ''; }, 260);
+  }
+}
+
 // seat spots as % of the felt: [left companion, you, right companion]
 const SPOTS = [{ x: 16, y: 50 }, { x: 50, y: 57 }, { x: 84, y: 50 }];
+// Nic's painted table (assets/img/table/felt-blackjack.jpg, the whole screen): the three betting circles,
+// and where the portraits stand
+const SPOTS_ART = [{ x: 24.4, y: 53.6 }, { x: 50, y: 63 }, { x: 76.1, y: 54.3 }];
+const PORTRAIT_X_ART = [11, 89];
 
 export class BlackjackTable {
   constructor(root, table, buyIn, companionIds, { onLeave }) {
@@ -44,31 +69,40 @@ export class BlackjackTable {
     clear(this.root);
     this.el = h('div', { class: 'table-screen bj' });
     this.topbar = h('div', { class: 'topbar table-top' },
-      h('button', { class: 'btn ghost small', onClick: () => this.requestLeave() }, '‹ Leave table'),
+      h('button', { class: 'btn ghost small leave-btn', onClick: () => this.requestLeave() }, '‹ Leave table'),
       h('div', { class: 'tt-title' }, this.table.name),
       h('div', { class: 'topbar-bank' }, 'Bank ', h('b', { class: 'bank-amt' }, fmt$(bank.state.bank))),
     );
     this.felt = h('div', { class: 'felt' });
-    assets.bg(this.felt, 'table.felt.blackjack') || assets.bg(this.felt, 'table.felt.holdem');
+    // Nic's blackjack scene is the whole screen (room + table); without it, fall back to the poker table on the felt
+    const art = !!assets.bg(this.el, 'table.felt.blackjack');
+    if (!art) assets.bg(this.felt, 'table.felt.holdem');
+    const spots = art ? SPOTS_ART : SPOTS;
     this.dealerEl = h('div', { class: 'bj-dealer' }, h('div', { class: 'bj-cards' }), h('div', { class: 'bj-total' }));
     this.msgEl = h('div', { class: 'bj-msg' });
     this.felt.append(h('div', { class: 'bj-rail' }), h('div', { class: 'bj-arc' }, 'BLACKJACK PAYS 3 TO 2', h('br'), 'DEALER STANDS ON 17'), this.dealerEl, this.msgEl);
     this.seatEls = {};
     for (const s of this.seats) {
-      const pos = SPOTS[s.spot];
+      const pos = spots[s.spot];
       const seatEl = h('div', { class: 'bj-seat' + (s.isHuman ? ' human' : ''), style: { left: pos.x + '%', top: pos.y + '%' } });
       const hands = h('div', { class: 'bj-hands' });
       const betEl = h('div', { class: 'bj-bet' });
       const plate = h('div', { class: 'nameplate' }, h('div', { class: 'pname' }, s.name), h('div', { class: 'pstack' }, fmt$(s.stack)));
       const bubble = h('div', { class: 'bubble' });
-      seatEl.append(hands, betEl, plate, bubble);
+      seatEl.append(hands, betEl);
       this.felt.append(seatEl);
       let portrait = null;
       if (!s.isHuman) {
         portrait = portraitEl(s.char, { size: 'md' });
-        const pw = h('div', { class: 'bj-portrait', style: { left: pos.x + '%' } }, portrait);
+        const px = art ? (s.spot === 0 ? PORTRAIT_X_ART[0] : PORTRAIT_X_ART[1]) : pos.x;
+        const pw = h('div', { class: 'bj-portrait', style: { left: px + '%' } }, portrait);
         this.felt.append(pw);
+        if (art) pw.append(bubble); // on the painted table they speak from where they stand
       }
+      if (!bubble.parentNode) seatEl.append(bubble);
+      // on the painted table your own plate sits on the felt beside your circle (the action bar would cover it below)
+      if (art && s.isHuman) this.felt.append(h('div', { class: 'bj-human-plate' }, plate));
+      else seatEl.append(plate);
       this.seatEls[s.id] = { seatEl, hands, betEl, plate, bubble, portrait, stackEl: plate.lastChild };
     }
     this.actionBar = h('div', { class: 'actionbar bj-actions hidden' });
@@ -128,8 +162,8 @@ export class BlackjackTable {
       }
       me.bet = Math.min(this.lastBet, me.stack, this.table.maxBet);
       const bar = this.actionBar; clear(bar); bar.classList.remove('hidden'); bar.classList.add('betting');
-      const amt = h('div', { class: 'bet-amt' });
-      const refresh = () => { amt.textContent = 'Bet ' + fmt$(me.bet); this.renderBet(me); dealBtn.disabled = me.bet < this.table.minBet; };
+      const amt = h('div', { class: 'bet-amt' }, h('div', { class: 'bet-line' }, h('span', { class: 'lbl' }, me.name), h('b', {}, fmt$(me.stack))), h('div', { class: 'bet-line' }, h('span', { class: 'lbl' }, 'Bet'), h('b', { class: 'bet-now' }, '')));
+      const refresh = () => { amt.querySelector('.bet-now').textContent = fmt$(me.bet); this.renderBet(me); dealBtn.disabled = me.bet < this.table.minBet; };
       const chips = h('div', { class: 'chip-rack' }, this.chipDenoms().map((d) => {
         const b = h('button', { class: 'rack-chip', onClick: () => { audio.play('chip'); me.bet = Math.min(me.bet + d, me.stack, this.table.maxBet); refresh(); } });
         if (!assets.bg(b, 'chip.' + d)) { b.classList.add('placeholder'); b.textContent = d >= 1000 ? d / 1000 + 'k' : d; }
@@ -156,7 +190,7 @@ export class BlackjackTable {
   }
 
   clearTable() {
-    clear(this.dealerEl.querySelector('.bj-cards')); this.dealerEl.querySelector('.bj-total').textContent = '';
+    clear(this.dealerEl.querySelector('.bj-cards')); setTotalBadge(this.dealerEl.querySelector('.bj-total'), '');
     for (const s of this.seats) { const E = this.seatEls[s.id]; clear(E.hands); clear(E.betEl); E.seatEl.classList.remove('acting'); }
   }
 
@@ -324,16 +358,21 @@ export class BlackjackTable {
       const E = this.seatEls[p.id];
       p.hands.forEach((hd, i) => {
         const he = this.handEl(E, i);
-        const v = handValue(hd.cards);
         const nat = isBlackjack(hd.cards) && !hd.fromSplit;
-        he.querySelector('.bj-hand-total').textContent = nat ? 'Blackjack!' : hd.cards.length ? (v.soft && v.total < 21 ? `${v.total - 10}/${v.total}` : String(v.total)) : '';
+        // the engine deals the whole round at once but the table shows cards one by one: count what's on the table
+        const shownCards = he.querySelectorAll('.bj-hand-cards .pcard').length;
+        const vShown = handValue(hd.cards.slice(0, shownCards));
+        const text = shownCards < 2 ? '' : nat && shownCards >= 2 ? 'Blackjack!' : (vShown.soft && vShown.total < 21 ? `${vShown.total - 10}/${vShown.total}` : String(vShown.total));
+        setTotalBadge(he.querySelector('.bj-hand-total'), text, { bust: vShown.total > 21, win: vShown.total === 21 });
         if (p.hands.length > 1 || hd.doubled) this.setBetTag(he, hd.bet);
       });
     }
     const d = r.dealer;
     const shown = dealerAll || !d.holeHidden ? d.cards : d.cards.slice(0, 1);
     const dv = handValue(shown);
-    this.dealerEl.querySelector('.bj-total').textContent = shown.length ? (dealerAll || !d.holeHidden ? String(dv.total) : String(cardValue(shown[0]))) : '';
+    const dealerShown = this.dealerEl.querySelectorAll('.bj-cards .pcard').length;
+    const dealerText = dealerShown >= 2 && shown.length ? (dealerAll || !d.holeHidden ? String(handValue(shown.slice(0, dealerShown)).total) : String(cardValue(shown[0]))) : '';
+    setTotalBadge(this.dealerEl.querySelector('.bj-total'), dealerText, { bust: dv.total > 21 && shown.length === d.cards.length, win: dv.total === 21 && shown.length > 1 });
   }
 
   async settleUI() {
@@ -341,7 +380,7 @@ export class BlackjackTable {
     if (res.dealerBust) { this.say(`Dealer busts with ${res.dealerTotal}.`); audio.play('chips'); for (const s of this.seats) if (!s.isHuman) this.talk(s, 'dealerBust', {}, 0.6); }
     else this.say(res.dealerBlackjack ? 'Dealer has blackjack.' : `Dealer stands on ${res.dealerTotal}.`);
     await this.wait(500);
-    let humanNet = 0, humanNatural = false, humanBet = 0;
+    let humanNet = 0, humanNatural = false, humanBet = 0; let humanAllBust = false;
     for (const pr of res.players) {
       const seat = this.seatById(pr.playerId); const E = this.seatEls[pr.playerId];
       const p = r.player(pr.playerId);
@@ -350,12 +389,12 @@ export class BlackjackTable {
       pr.hands.forEach((hd, i) => {
         back += hd.bet + hd.payout;
         const he = this.handEl(E, i);
-        const label = hd.result === 'blackjack' ? `Blackjack! +${fmt$(hd.payout)}` : hd.result === 'win' ? `Win +${fmt$(hd.payout)}` : hd.result === 'push' ? 'Push' : hd.result === 'bust' ? 'Bust' : 'Lose';
+        const label = hd.result === 'blackjack' ? `BLACKJACK +${fmt$(hd.payout)}` : hd.result === 'win' ? `WIN +${fmt$(hd.payout)}` : hd.result === 'push' ? 'PUSH' : hd.result === 'bust' ? 'BUST' : 'LOSE';
         this.tag(he, label, hd.result === 'push' ? 'push' : hd.payout > 0 ? 'win' : 'lose');
       });
       if (p.insurance && res.dealerBlackjack) back += p.insurance * 3;
       seat.stack += back; this.updateStack(seat);
-      if (seat.isHuman) { humanNet = pr.net; humanBet = pr.hands.reduce((s, x) => s + x.bet, 0); humanNatural = pr.hands.some((x) => x.result === 'blackjack'); }
+      if (seat.isHuman) { humanNet = pr.net; humanBet = pr.hands.reduce((s, x) => s + x.bet, 0); humanNatural = pr.hands.some((x) => x.result === 'blackjack'); humanAllBust = pr.hands.length > 0 && pr.hands.every((x) => x.result === 'bust'); }
       else if (pr.net > 0) {
         const natural = pr.hands.some((x) => x.result === 'blackjack');
         this.talk(seat, natural ? 'blackjack' : pr.net >= this.table.minBet * 6 ? 'winBig' : 'winSmall', {}, 0.5);
@@ -371,8 +410,11 @@ export class BlackjackTable {
     }
     bank.recordHand({ won: humanNet > 0, showdown: false, pot: humanNet > 0 ? humanNet + humanBet : 0, net: humanNet, handName: humanNatural ? 'Blackjack' : null, handScore: humanNatural ? 1 : 0 });
     bank.setAtTable({ tableId: this.table.id, stack: this.human.stack, opponents: this.seats.filter((s) => !s.isHuman).map((s) => s.id) });
-    if (humanNet > 0) { audio.play(humanNatural || humanNet >= this.table.minBet * 8 ? 'bigwin' : 'win'); await this.wait(400); await this.winBanner(humanNet, humanNatural ? 'Blackjack!' : null, humanNatural || humanNet >= this.table.minBet * 8); }
-    else { if (humanNet < 0) audio.play('lose', { volume: 0.4 }); await this.wait(1400); }
+    const big = humanNatural || humanNet >= this.table.minBet * 8;
+    if (humanNet > 0) { audio.play(big ? 'bigwin' : 'win'); await this.wait(400); if (big) await this.winBanner(humanNet, humanNatural ? 'Blackjack!' : null, true); else await resultBanner(this.felt, { type: 'win', amount: humanNet }); }
+    else if (humanNet < 0) { audio.play('lose', { volume: 0.4 }); await this.wait(300); await resultBanner(this.felt, { type: humanAllBust ? 'bust' : 'lose', amount: humanNet }); }
+    else if (humanBet > 0) { await this.wait(300); await resultBanner(this.felt, { type: 'push', amount: 0 }); }
+    else await this.wait(1400);
   }
 
   // Swap in a companion's happy / mad portrait for a few seconds, if that art exists.

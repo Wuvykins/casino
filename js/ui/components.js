@@ -118,3 +118,26 @@ export function askLeave({ title = 'Leave the table?', text, afterLabel = 'After
     ],
   }).then((v) => v || 'stay');
 }
+
+// Result banner (Nic's blackjack-results.js, built in DOM). type: 'win' | 'lose' | 'bust' | 'push'.
+// Rises in over .38 s, holds, and fades out over the last .35 s (2.2 s total by default). Wins get a warm halo, a gleam that sweeps across
+// and a few gold sparks; a bust shakes on entry; losses and pushes stay quiet. Resolves when it has gone.
+export function resultBanner(container, { type = 'win', amount = 0, title, caption, sub, hold = 2200 } = {}) {
+  const win = type === 'win', push = type === 'push', bust = type === 'bust';
+  const money = (win ? '+' : push ? '' : '\u2212') + fmt$(Math.abs(amount));
+  const el = h('div', { class: 'rb ' + type },
+    h('div', { class: 'rb-cap' }, caption ?? (win ? '\u2660   HAND WON   \u2660' : push ? 'HAND TIED' : bust ? 'OVER 21' : 'HAND COMPLETE')),
+    h('div', { class: 'rb-title' }, title ?? (win ? 'You win' : push ? 'Push' : bust ? 'Bust' : 'Dealer wins')),
+    h('div', { class: 'rb-amt' }, sub ?? (push ? 'Bet returned' : money)),
+  );
+  if (win) {
+    el.append(h('i', { class: 'rb-gleam' }));
+    for (let i = 0; i < 14; i++) el.append(h('i', { class: 'rb-spark', style: { '--a': (i * 2.399).toFixed(3) + 'rad', '--r': (110 + (i % 4) * 15) + 'px', '--c': i % 2 ? '#f7d77e' : '#fff0c5' } }));
+  }
+  container.append(el);
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => el.classList.add('in'));
+    setTimeout(() => el.classList.add('out'), hold - 350);
+    setTimeout(() => { el.remove(); resolve(); }, hold);
+  });
+}

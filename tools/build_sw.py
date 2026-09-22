@@ -4,13 +4,17 @@ The version is a hash of every listed file, so the phone picks up changes on its
 import hashlib, os, json
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(ROOT)
-KEEP = ('.html', '.css', '.js', '.webmanifest', '.png', '.jpg', '.jpeg', '.webp', '.mp3', '.m4a', '.wav', '.ogg')
+KEEP = ('.html', '.css', '.js', '.webmanifest', '.json', '.png', '.jpg', '.jpeg', '.webp', '.mp3', '.m4a', '.wav', '.ogg')
+# Songs stream from the network and stay out of the offline cache: 25+ of them is more than iOS will reliably hold in
+# the Cache API, and one failed download would fail the whole install. Everything else (room loop, sfx, voices) is cached.
+STREAM = lambda f: f.startswith('assets/music/song-')
 files = ['index.html', 'manifest.webmanifest']
 for top in ('css', 'js', 'assets'):
     for d, _, fs in os.walk(top):
         for f in fs:
-            if f.lower().endswith(KEEP):
-                files.append(os.path.join(d, f).replace(os.sep, '/'))
+            rel = os.path.join(d, f).replace(os.sep, '/')
+            if f.lower().endswith(KEEP) and not STREAM(rel):
+                files.append(rel)
 files = sorted(set(files))
 h = hashlib.sha1()
 for f in files:
@@ -28,9 +32,11 @@ self.addEventListener('activate', (e) => {{
 // Cached files come straight from the cache (fast, works offline). Anything else goes to the network,
 // and a successful same-origin answer is kept so optional art you add later works offline too.
 self.addEventListener('fetch', (e) => {{
-  if (e.request.method !== 'GET' || new URL(e.request.url).origin !== self.location.origin) return;
+  const u = new URL(e.request.url);
+  if (e.request.method !== 'GET' || u.origin !== self.location.origin) return;
+  if (/\/assets\/music\/song-/.test(u.pathname)) return;   // songs stream (range requests) and are not cached
   e.respondWith(caches.match(e.request, {{ ignoreSearch: true }}).then((hit) => hit || fetch(e.request).then((res) => {{
-    if (res.ok) {{ const copy = res.clone(); caches.open(VERSION).then((c) => c.put(e.request, copy)); }}
+    if (res.ok && res.status === 200) {{ const copy = res.clone(); caches.open(VERSION).then((c) => c.put(e.request, copy)); }}
     return res;
   }})));
 }});

@@ -13,7 +13,7 @@ import { LOBBY_HOTSPOTS, SHOW_HOTSPOT_GUIDES } from '../content/lobby.js';
 const GAMES = [
   { id: 'holdem', name: "Texas Hold'em", sub: 'Limit & No-Limit', open: true, icon: '♠' },
   { id: 'blackjack', name: 'Blackjack', sub: '6 decks · 3 to 2', open: true, icon: '21' },
-  { id: 'slots', name: 'Slots', sub: 'Coming soon', open: false, icon: '7' },
+  { id: 'slots', name: 'Slots', sub: 'Van Halen · Hot for Jackpot', open: true, icon: '7' },
   { id: 'farkle', name: 'Farkle', sub: 'First to 10,000', open: true, icon: '⚄' },
   { id: 'cribbage', name: 'Cribbage', sub: 'First to 121', open: true, icon: '15' },
 ];
@@ -171,6 +171,7 @@ export function showSettings(root, ctx, opts = {}) {
       h('div', { class: 'row space' },
         h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: s.settings.music !== false ? true : null, onChange: (e) => { bank.setSetting('music', e.target.checked); music.refresh(); } }), 'Music'),
         h('button', { class: 'btn ghost small', onClick: () => { audio.play('tap'); if (music.skip()) toast('Next song'); else toast('Music is off'); } }, 'Skip song ⏭'),
+        h('button', { class: 'btn ghost small', onClick: () => { audio.play('tap'); showSetlist(); } }, 'Setlist ♪'),
       ),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: s.settings.roomSound !== false ? true : null, onChange: (e) => { bank.setSetting('roomSound', e.target.checked); music.refresh(); } }), 'Lobby room sound'),
       h('div', { class: 'field' }, h('label', {}, 'Music volume'), h('input', { type: 'range', min: 0, max: 1, step: 0.05, value: typeof s.settings.musicVolume === 'number' ? s.settings.musicVolume : 0.7, onInput: (e) => { bank.setSetting('musicVolume', +e.target.value); music.refresh(); } })),
@@ -195,6 +196,33 @@ export function showSettings(root, ctx, opts = {}) {
     },
     buttons: [{ label: 'Done', kind: 'primary' }],
   }).then(() => { if (!atTable) renderLobby(root, ctx); });
+}
+
+// The Setlist: every song in assets/music, with a switch to keep it in or out of the rotation and a play-now button.
+export function showSetlist() {
+  return modal({
+    title: 'Setlist', dismissable: true, className: 'setlist-modal',
+    body: (el) => {
+      const now = h('div', { class: 'muted small setlist-now' });
+      const list = h('div', { class: 'setlist' });
+      const render = () => {
+        const songs = music.songs;
+        const onCount = songs.filter((x) => x.on).length;
+        now.textContent = !songs.length ? 'No songs found in assets/music.' : music.nowPlaying ? `Now playing: ${music.nowPlaying}` : onCount ? 'Nothing playing right now.' : 'Every song is off — the floor is quiet.';
+        clear(list);
+        for (const song of songs) {
+          list.append(h('div', { class: 'setlist-row' + (song.playing ? ' playing' : '') + (song.on ? '' : ' off') },
+            h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: song.on ? true : null, onChange: (e) => { music.setSongOn(song.file, e.target.checked); setTimeout(render, 350); } }),
+              h('span', { class: 'setlist-title' }, song.title, song.artist ? h('span', { class: 'setlist-artist' }, ' · ' + song.artist) : null)),
+            h('button', { class: 'btn ghost small setlist-play', title: 'Play this now', onClick: () => { audio.play('tap'); if (music.playSong(song.url)) { toast(song.title); setTimeout(render, 350); } else toast('Music is off'); } }, song.playing ? '♪' : '▶'),
+          ));
+        }
+      };
+      render();
+      el.append(now, list, h('p', { class: 'muted small' }, 'Off means out of the shuffle. To add a song, drop song-N.mp3 in assets/music (next number up) and add its title to setlist.json.'));
+    },
+    buttons: [{ label: 'Done', kind: 'primary' }],
+  });
 }
 
 export async function askName() {

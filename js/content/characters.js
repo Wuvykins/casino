@@ -123,7 +123,6 @@ export const CHARACTERS = [
       caughtBluff: [{ text: 'Ya got me.', file: '12-caughtbluff.mp3' }],
       hurry: [{ text: 'It is not that serious.', file: '13-hurry.mp3' }],
       rebuy: [{ text: 'Better call my bank.', file: '14-rebuy.mp3' }],
-      playerWin: [{ text: 'Hell yeah!', file: '08-winbig.mp3' }],
       hit: [{ text: 'Hit.', file: '16-hit.mp3' }],
       stand: [{ text: 'Stand.', file: '17-stand.mp3' }],
       double: [{ text: 'Double down.', file: '18-double.mp3' }],

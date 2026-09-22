@@ -28,6 +28,8 @@ export const ASSET_FILES = {
   'table.felt.cribbage': 'img/table/felt-cribbage',   // cribbage table background (falls back to the hold'em felt)
   'table.felt.farkle':   'img/table/felt-farkle',     // farkle table: the whole scene incl. the room behind (2:1, ~1774x887)
   'farkle.cup':          'img/farkle/cup',            // the leather dice cup (transparent png)
+  'slots.bg':            'img/slots/background',      // the Van Halen machine with empty reels (whole screen, 1774x887)
+  'slots.symbols':       'img/slots/symbols',         // same picture with the reel symbols showing (the symbols are cropped out of it)
   'table.dealer':       'img/table/dealer-button',  // dealer button (~128x128)
   'table.crib.board':   'img/table/cribbage-board',   // the cribbage board, wide strip (~2138x275); hole positions are in cribbageTable.js
   'table.crib.peg.you': 'img/table/cribbage-peg-gold', // your pegs (~128x128, transparent)
@@ -95,7 +97,7 @@ export const assets = {
   isOptional(key) {
     if (/^deck\.(?!back$)/.test(key)) return true;               // card faces and the second back
     if (/^portrait\..+\.(happy|mad)$/.test(key)) return true;    // extra expressions
-    if (key === 'table.felt.blackjack' || key === 'table.felt.cribbage' || key === 'table.felt.farkle' || key === 'lobby.cashier') return true;
+    if (key === 'table.felt.blackjack' || key === 'table.felt.cribbage' || key === 'table.felt.farkle' || key === 'lobby.cashier' || key === 'slots.bg' || key === 'slots.symbols') return true;
     if (/^dice\./.test(key)) return true;
     if (key.startsWith('lobby.door.') && this.has('lobby.floor')) return true; // doors are hidden once there's floor art
     return false;
