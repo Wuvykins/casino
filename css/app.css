@@ -1,5 +1,5 @@
 /* ============ base ============ */
-:root { --gear: clamp(48px, 14vh, 60px);
+:root { --gear: clamp(44px, 12.5vh, 60px);
   --bg: #0b1a12;
   --felt: #1d6b3f;
   --felt-dark: #124a2b;
@@ -149,12 +149,10 @@ body.portrait #rotate { display: grid; }
 .np-artist { color: #dcd7b8; font-size: clamp(12px, 3.2vh, 15px); min-height: 1.2em; }
 .pause-btn { min-width: 6.2em; text-align: center; }
 /* ♫ beside the gear at the tables: opens Casino Radio directly */
-.note-btn { position: absolute; right: calc(var(--gear) + 20px + var(--safe-r)); bottom: calc(10px + var(--safe-b)); width: var(--gear); height: var(--gear); border-radius: 50%; border: 2px solid #d9b95c; background: radial-gradient(circle at 50% 30%, #0b3a21, #031a0e 75%); color: #f0cd6e; font-size: clamp(22px, 7vh, 30px); display: grid; place-items: center; z-index: 11; box-shadow: inset 0 1px 0 rgba(255,240,190,.35), inset 0 -2px 3px rgba(0,0,0,.5), 0 0 0 1px #6f561f, 0 4px 12px rgba(0,0,0,.5); }
+.note-btn { position: absolute; right: calc(12px + var(--safe-r)); bottom: calc(var(--gear) + 22px + var(--safe-b)); width: var(--gear); height: var(--gear); border-radius: 50%; border: 2px solid #d9b95c; background: radial-gradient(circle at 50% 30%, #0b3a21, #031a0e 75%); color: #f0cd6e; font-size: clamp(22px, 7vh, 30px); display: grid; place-items: center; z-index: 11; box-shadow: inset 0 1px 0 rgba(255,240,190,.35), inset 0 -2px 3px rgba(0,0,0,.5), 0 0 0 1px #6f561f, 0 4px 12px rgba(0,0,0,.5); }
 .note-btn:active { transform: scale(.94); }
 .gear-btn .ico, .note-btn .ico { font-size: clamp(24px, 7.5vh, 32px); width: 1em; height: 1em; }
 /* blackjack: stacked at the right edge (music above settings) so the dealer's-end portrait stays clear; a little breathing room from the edges for thumbs */
-.bj .gear-btn { right: calc(14px + var(--safe-r)); bottom: calc(14px + var(--safe-b)); }
-.bj .note-btn { right: calc(14px + var(--safe-r)); bottom: calc(var(--gear) + 26px + var(--safe-b)); }
 
 .hotspots { position: absolute; inset: 0; }
 .hotspot { position: absolute; background: transparent; border: 1.5px solid rgba(230,195,106,.0); border-radius: 14px; display: flex; align-items: flex-end; justify-content: center; padding: 6px; transition: border-color .2s, background .2s; }
@@ -394,7 +392,7 @@ body.portrait #rotate { display: grid; }
 /* hand info + action bar */
 .handinfo { position: absolute; left: calc(12px + var(--safe-l)); bottom: calc(12px + var(--safe-b)); color: var(--gold); font-weight: 800; font-size: clamp(16px, 4.4vh, 22px); background: rgba(0,0,0,.5); padding: 4px 10px; border-radius: 999px; z-index: 9; }
 .handinfo:empty { display: none; }
-.actionbar { position: absolute; right: calc(var(--gear) * 2 + 32px + var(--safe-r)); bottom: calc(10px + var(--safe-b)); display: flex; gap: 8px; align-items: stretch; z-index: 10; }
+.actionbar { position: absolute; right: calc(var(--gear) + 24px + var(--safe-r)); bottom: calc(10px + var(--safe-b)); display: flex; gap: 8px; align-items: stretch; z-index: 10; }
 .actionbar.hidden, .nextbar.hidden { display: none; }
 .actionbar.raising { flex-direction: column; align-items: stretch; gap: 6px; }
 .raise-row { display: flex; gap: 8px; justify-content: flex-end; }
@@ -410,8 +408,8 @@ body.portrait #rotate { display: grid; }
 .pre { flex: 1; padding: 6px 2px; border-radius: 8px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.08); font-size: 12px; font-weight: 700; }
 .slider-row { display: flex; gap: 10px; align-items: center; }
 .raise-amt { font-weight: 800; min-width: 64px; text-align: right; color: var(--gold); }
-.nextbar { position: absolute; right: calc(var(--gear) * 2 + 32px + var(--safe-r)); bottom: calc(10px + var(--safe-b)); z-index: 10; }
-.gear-btn { position: absolute; right: calc(10px + var(--safe-r)); bottom: calc(10px + var(--safe-b)); width: var(--gear); height: var(--gear); border-radius: 50%; border: 2px solid #d9b95c; background: radial-gradient(circle at 50% 30%, #0b3a21, #031a0e 75%); color: #f0cd6e; line-height: 1; display: grid; place-items: center; z-index: 11; box-shadow: inset 0 1px 0 rgba(255,240,190,.35), inset 0 -2px 3px rgba(0,0,0,.5), 0 0 0 1px #6f561f, 0 4px 12px rgba(0,0,0,.5); }
+.nextbar { position: absolute; right: calc(var(--gear) + 24px + var(--safe-r)); bottom: calc(10px + var(--safe-b)); z-index: 10; }
+.gear-btn { position: absolute; right: calc(12px + var(--safe-r)); bottom: calc(12px + var(--safe-b)); width: var(--gear); height: var(--gear); border-radius: 50%; border: 2px solid #d9b95c; background: radial-gradient(circle at 50% 30%, #0b3a21, #031a0e 75%); color: #f0cd6e; line-height: 1; display: grid; place-items: center; z-index: 11; box-shadow: inset 0 1px 0 rgba(255,240,190,.35), inset 0 -2px 3px rgba(0,0,0,.5), 0 0 0 1px #6f561f, 0 4px 12px rgba(0,0,0,.5); }
 .gear-btn:active { transform: scale(.94); }
 .nextbar .btn { height: clamp(44px, 12vh, 60px); min-width: 140px; font-size: 16px; }
 
@@ -785,7 +783,7 @@ body.portrait #rotate { display: grid; }
 .fk .nameplate.you.acting { box-shadow: 0 0 0 2px var(--fkgold), 0 0 16px rgba(224,194,122,.6); }
 .fk .nameplate.you.acting .fk-yourturn { display: inline-block; }
 /* messages: the line under the rail */
-.fk-msg { position: absolute; left: 50%; bottom: 17.5%; transform: translateX(-50%); max-width: 56%; font-family: var(--serif); font-size: clamp(14px, 4vh, 21px); color: #f3ead6; text-shadow: 0 1px 3px rgba(0,0,0,.9); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 4; padding: 4px 10px; transition: transform .2s; }
+.fk-msg { position: absolute; left: 50%; bottom: calc(17.5% + var(--safe-b)); transform: translateX(-50%); max-width: 56%; font-family: var(--serif); font-size: clamp(14px, 4vh, 21px); color: #f3ead6; text-shadow: 0 1px 3px rgba(0,0,0,.9); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 4; padding: 4px 10px; transition: transform .2s; }
 .fk-msg:empty { display: none; }
 .fk-msg.farkle { background: linear-gradient(180deg, #d94a4a, #8a1f1f); border-radius: 12px; font-weight: 900; font-size: clamp(18px, 5.4vh, 28px); letter-spacing: .04em; }
 .fk-msg.bad { color: #ff9a9a; }
@@ -822,7 +820,8 @@ body.portrait #rotate { display: grid; }
 .fk-cup.placeholder { border-radius: 12% 12% 40% 40% / 6% 6% 20% 20%; background: linear-gradient(90deg, #2a221c, #4a3a2c 50%, #221a14); border: 3px solid #b08a3c; }
 @keyframes cupshake { 0% { transform: rotate(-147deg) translate(-4%, 1%); } 25% { transform: rotate(-124deg) translate(4%, -3%); } 50% { transform: rotate(-146deg) translate(-3%, 3%); } 75% { transform: rotate(-123deg) translate(3%, 0); } 100% { transform: rotate(-147deg) translate(-4%, 1%); } }
 /* buttons */
-.fk .actionbar { align-items: stretch; right: auto; left: 61%; transform: translateX(-50%); bottom: calc(12px + var(--safe-b)); gap: 12px; }
+.fk .actionbar { align-items: stretch; right: auto; left: 60%; transform: translateX(-50%); bottom: calc(12px + var(--safe-b)); gap: 12px; max-width: calc(100% - 2% - 34vw - var(--gear) - 40px); }
+@media (max-height: 460px) { .fk .actionbar { gap: 8px; left: 59%; } .fk .act { padding: 0 12px; } .fk .act.call, .fk .act.raise.bank { min-width: clamp(96px, 15vw, 160px); } .fk .act.back { min-width: clamp(80px, 11vw, 120px); } }
 .fk .act { height: clamp(44px, 11vh, 56px); padding: 0 18px; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
 .fk .act { font-family: var(--serif); letter-spacing: .08em; text-transform: uppercase; border: 1.5px solid rgba(224,194,122,.8); border-radius: 12px; box-shadow: 0 6px 14px rgba(0,0,0,.45); }
 .fk .act.back { background: rgba(6,24,14,.85); color: var(--fkgold); font-size: clamp(11px, 3vh, 15px); min-width: clamp(90px, 14vw, 140px); }
@@ -891,3 +890,13 @@ label.check { font-family: Georgia, 'Times New Roman', serif; color: #eee5cc; }
 .setlist-play { flex: none; width: clamp(42px, 11vh, 56px); height: clamp(32px, 8.6vh, 44px); border-radius: 10px; border: 2px solid #d9b95c; background: linear-gradient(180deg, #14452a, #0b2c1b); color: #efc867; font-size: clamp(14px, 3.8vh, 19px); display: grid; place-items: center; box-shadow: inset 0 1px 0 rgba(255,240,190,.4), inset 0 -2px 0 rgba(0,0,0,.4), 0 2px 5px rgba(0,0,0,.5); text-shadow: 0 1px 1px rgba(0,0,0,.6); }
 .setlist-play:active { transform: translateY(1px); }
 .setlist-play.on { background: linear-gradient(180deg, #1c5a36, #0f3a22); box-shadow: inset 0 1px 0 rgba(255,240,190,.4), inset 0 -2px 0 rgba(0,0,0,.4), 0 0 10px rgba(240,200,90,.35); }
+
+/* phones (short screens): the blackjack betting panel shrinks so the players either side stay visible */
+@media (max-height: 460px) {
+  .bj.has-art .actionbar.betting { padding: 4px 8px 4px 10px; }
+  .bj.has-art .actionbar.betting .rack-chip { width: clamp(34px, 8.5vh, 44px); height: clamp(34px, 8.5vh, 44px); }
+  .bj.has-art .actionbar.betting .bet-amt { font-size: clamp(14px, 3.8vh, 18px); padding-right: 12px; }
+  .bj.has-art .actionbar.betting .bet-panel { column-gap: 10px; }
+  .bj.has-art .actionbar.betting .act.raise { min-width: clamp(96px, 16vw, 150px); font-size: clamp(16px, 4.6vh, 22px); }
+  .bj .actionbar .act { min-width: clamp(64px, 10vw, 96px); }
+}
