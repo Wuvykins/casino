@@ -145,4 +145,13 @@ boot();
 // Installed as an app: cache everything so it opens offline. Skipped when embedded (e.g. the Claude test link) or on plain http.
 if ('serviceWorker' in navigator && window.self === window.top && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   navigator.serviceWorker.register(new URL('../sw.js', import.meta.url)).catch(() => {});
+  // A new build took over (the phone launched an old cached copy while the new one installed): reload once while we
+  // are still on the intro so the new version shows on THIS launch instead of the next one; mid-game, just say so.
+  let hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) { hadController = true; return; }          // first install, nothing to swap
+    const splash = document.getElementById('splash');
+    if (splash && !splash.classList.contains('out')) location.reload();
+    else import('./ui/dom.js').then(({ toast }) => toast('Casino updated — the new version loads next time you open it.', 4000));
+  });
 }

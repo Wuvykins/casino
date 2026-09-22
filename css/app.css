@@ -891,8 +891,12 @@ label.check { font-family: Georgia, 'Times New Roman', serif; color: #eee5cc; }
 .setlist-play:active { transform: translateY(1px); }
 .setlist-play.on { background: linear-gradient(180deg, #1c5a36, #0f3a22); box-shadow: inset 0 1px 0 rgba(255,240,190,.4), inset 0 -2px 0 rgba(0,0,0,.4), 0 0 10px rgba(240,200,90,.35); }
 
-/* phones (short screens): the blackjack betting panel shrinks so the players either side stay visible */
+/* phones (short screens): the blackjack betting panel shrinks so the players either side stay visible; the hold'em
+   tray tightens so it clears your hole cards even with the iPhone's side inset */
 @media (max-height: 460px) {
+  .holdem .actionbar:not(.hidden) { gap: 8px; padding: 6px 8px; }
+  .holdem .act { min-width: clamp(64px, 10vw, 96px); padding: 0 10px; font-size: clamp(15px, 4vh, 20px); }
+  .holdem .actionbar.raising { gap: 6px; }
   .bj.has-art .actionbar.betting { padding: 4px 8px 4px 10px; }
   .bj.has-art .actionbar.betting .rack-chip { width: clamp(34px, 8.5vh, 44px); height: clamp(34px, 8.5vh, 44px); }
   .bj.has-art .actionbar.betting .bet-amt { font-size: clamp(14px, 3.8vh, 18px); padding-right: 12px; }
