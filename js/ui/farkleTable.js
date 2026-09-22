@@ -8,7 +8,7 @@ import { assets } from '../core/assets.js';
 import { audio } from '../core/audio.js';
 import { characterById } from '../content/characters.js';
 import { pickLine } from '../content/lines.js';
-import { showSettings } from './lobby.js';
+import { showSettings, noteButton, icon } from './lobby.js';
 
 const HUMAN = 'you';
 const OPP_SPOTS = { 1: [50], 2: [32, 68], 3: [25, 50, 75] };
@@ -72,8 +72,8 @@ export class FarkleTable {
     if (!assets.bg(this.cupEl, 'farkle.cup')) this.cupEl.classList.add('placeholder');
     this.felt.append(this.msgEl, this.trayEl, this.cupEl, this.keptEl, this.turnEl, this.youPlate);
     this.actionBar = h('div', { class: 'actionbar fk-actions hidden' });
-    this.gearBtn = h('button', { class: 'gear-btn', title: 'Settings', onClick: () => { audio.play('tap'); showSettings(this.root, {}, { atTable: true }); } }, '⚙');
-    this.el.append(this.topbar, this.felt, this.actionBar, this.gearBtn);
+    this.gearBtn = h('button', { class: 'gear-btn', title: 'Settings', onClick: () => { audio.play('tap'); showSettings(this.root, {}, { atTable: true }); } }, icon('gear'));
+    this.el.append(this.topbar, this.felt, this.actionBar, this.gearBtn, noteButton(this.root));
     this.root.append(this.el);
     this.unsubBank = bank.onChange(() => { const b = this.topbar.querySelector('.bank-amt'); if (b) b.textContent = fmt$(bank.state.bank); });
   }

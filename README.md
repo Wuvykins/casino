@@ -125,7 +125,7 @@ Songs live in `assets/music/song-N.mp3`, numbered from 1 with no gaps (the game 
 
     python3 tools/make_song.py "Some Song.mp3" 26
 
-That trims the lead-in, softens it to sound like a speaker across the room and matches the level of the others. Then add a line for it to `assets/music/setlist.json` (`{ "file": "song-26.mp3", "title": "…", "artist": "…" }`) so it has a name, and run `python3 tools/build_sw.py`. Settings → **Setlist ♪** lists every song: untick one to take it out of the shuffle, ▶ plays it right now. Songs stream rather than being stored for offline play (there are too many for the phone to keep), so the music needs a connection; everything else in the game works offline.
+That trims the lead-in, softens it to sound like a speaker across the room and matches the level of the others. Then add a line for it to `assets/music/setlist.json` (`{ "file": "song-26.mp3", "title": "…", "artist": "…" }`) so it has a name, and run `python3 tools/build_sw.py`. The **Songs** button on Casino Radio (bottom-right of the lobby) opens the Music Library: untick a song to take it out of the shuffle, ▶ plays it right now. Songs stream rather than being stored for offline play (there are too many for the phone to keep), so the music needs a connection; everything else in the game works offline.
 
 ## Tests
 

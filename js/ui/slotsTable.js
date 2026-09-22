@@ -18,7 +18,7 @@ import { makeRng } from '../core/rng.js';
 import { bank, fmt$ } from '../core/bank.js';
 import { assets } from '../core/assets.js';
 import { audio, music } from '../core/audio.js';
-import { showSettings } from './lobby.js';
+import { showRadio } from './lobby.js';
 
 const W = 1774, H = 887;
 // where each symbol is on the symbols picture: [sx, sy, sw, sh]  (index = SYMBOLS order)
@@ -54,7 +54,7 @@ export class SlotsTable {
     const hit = (cls, box, onClick, label) => h('button', { class: 'slot-hit ' + cls, 'aria-label': label, style: { left: box[0] + '%', top: box[1] + '%', width: (box[2] - box[0]) + '%', height: (box[3] - box[1]) + '%' }, onClick });
     this.hits = {
       paytable: hit('paytable', [13, 84.5, 20.3, 96.5], () => { audio.play('tap'); this.showPaytable(); }, 'Paytable'),
-      sound: hit('sound', [21, 84.5, 28, 96.5], () => { audio.play('tap'); showSettings(this.root, {}, { atTable: true }); }, 'Sound'),
+      sound: hit('sound', [21, 84.5, 28, 96.5], () => { audio.play('tap'); showRadio(this.root, {}, { atTable: true }); }, 'Casino Radio'),
       less: hit('less', [57.3, 87, 61.3, 95], () => this.changeBet(-1), 'Lower bet'),
       more: hit('more', [68.8, 87, 72.8, 95], () => this.changeBet(1), 'Raise bet'),
       spin: hit('spin', [76.5, 80.5, 89.5, 98.5], () => this.stopNext(), 'Stop'),

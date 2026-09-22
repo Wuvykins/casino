@@ -25,13 +25,15 @@ export const audio = {
   },
   get enabled() { return bank.state?.settings?.sound !== false; },
   get musicEnabled() { return bank.state?.settings?.music !== false; },
-  get musicVolume() { const v = bank.state?.settings?.musicVolume; return typeof v === 'number' ? v : 0.7; },
+  get musicVolume() { const v = bank.state?.settings?.musicVolume; return typeof v === 'number' ? v : 0.7; },   // 0..1.5: 0.7 is the standard level, above 1 is a boost
+  get sfxVolume() { const v = bank.state?.settings?.sfxVolume; return typeof v === 'number' ? v : 1; },
+  get voiceVolume() { const v = bank.state?.settings?.voiceVolume; return typeof v === 'number' ? v : 1; },
   get voicesEnabled() { return bank.state?.settings?.voices !== false; },
 
   play(key, opts = {}) {
     if (!this.enabled) return;
     const file = fileSfx.get(key);
-    if (file) { const a = new Audio(file); a.volume = opts.volume ?? 0.8; a.play().catch(() => {}); return a; }
+    if (file) return playClip(file, (opts.volume ?? 0.8) * this.sfxVolume);
     if (!ctx || !unlocked) return null;
     try { synth[key]?.(ctx, opts); } catch { /* ignore */ }
     return null;
@@ -40,12 +42,32 @@ export const audio = {
   // Play a recorded line: assets/voice/<characterId>/<file>. Returns true if a clip was started.
   voice(character, file) {
     if (!this.voicesEnabled || !character || !file) return false;
-    const a = new Audio(assets.fileUrl(`voice/${character.id}/${file}`));
-    a.volume = 1;
-    a.play().catch(() => {});
+    playClip(assets.fileUrl(`voice/${character.id}/${file}`), this.voiceVolume);
     return true;
   },
 };
+
+// the synthesised placeholders share one gain so the Sound effects slider covers them as well
+let sfxBus = null;
+function bus() { const c = ctxNow(); if (!sfxBus) { sfxBus = c.createGain(); sfxBus.connect(c.destination); } sfxBus.gain.value = audio.sfxVolume; return sfxBus; }
+
+// Clips (effects and voice lines) go through WebAudio too — element -> gain -> speakers — because iPhone Safari
+// ignores element.volume, and the volume sliders have to work there. Falls back to a bare element before the
+// first tap (when the context can't run yet). Returns something with pause() so callers can cut a clip short.
+function playClip(url, volume) {
+  const el = new Audio(url);
+  el.volume = Math.min(1, volume);
+  if (ctx && unlocked) {
+    try {
+      const c = ctxNow();
+      const gain = c.createGain(); gain.gain.value = volume;
+      c.createMediaElementSource(el).connect(gain).connect(c.destination);
+      el.volume = 1;
+    } catch { /* keep the plain element */ }
+  }
+  el.play().catch(() => {});
+  return el;
+}
 
 // ---------- background music + lobby room sound ----------
 // Songs live in assets/music/song-N.mp3 (shuffled, no repeats back to back). The lobby also has a room-sound loop,
@@ -125,7 +147,7 @@ export const music = {
     const roomUrl = assets.fileUrl('music/lobby-room.mp3');
     if (await probeAudio(roomUrl)) musicFiles.set('room', roomUrl);
     // iOS won't start audio until the first tap: retry anything that's meant to be playing on the next gesture
-    const retry = () => { ctxNow(); if (track && track.el.paused && audio.musicEnabled) track.el.play().catch(() => {}); if (room && room.el.paused && this.roomWanted) room.el.play().catch(() => {}); };
+    const retry = () => { ctxNow(); if (track && track.el.paused && audio.musicEnabled && !this.userPaused) track.el.play().catch(() => {}); if (room && room.el.paused && this.roomWanted) room.el.play().catch(() => {}); };
     for (const ev of ['touchend', 'mousedown', 'keydown']) document.addEventListener(ev, retry, { passive: true });
   },
   get roomEnabled() { return bank.state?.settings?.roomSound !== false; },
@@ -133,6 +155,16 @@ export const music = {
   has(key) { return musicFiles.has(key); },
   // every song the game found, for the Setlist editor
   get songs() { const off = new Set(bank.state?.settings?.setlistOff || []); return playlist.map((url, i) => { const file = url.split('/').pop(); const t = titles.get(file) || {}; return { url, file, title: t.title || `Song ${i + 1}`, artist: t.artist || '', on: !off.has(file), playing: !!track && track.el.src.endsWith('/' + file) }; }); },
+  // pause / resume for the Casino Radio widget (a pause keeps the song where it is; resume picks it back up)
+  get paused() { return !!track && track.el.paused && this.userPaused; },
+  get playing() { return !!track && !track.el.paused; },
+  userPaused: false,
+  toggle() {
+    if (!audio.musicEnabled) return false;
+    if (track && !track.el.paused) { this.userPaused = true; rampGain(track, 0, 250); const t = track; setTimeout(() => { if (track === t && this.userPaused) t.el.pause(); }, 280); return true; }
+    if (track && track.el.paused) { this.userPaused = false; track.el.play().catch(() => {}); rampGain(track, musicLevel(), 400); return true; }
+    this.userPaused = false; const k = this.key || 'lobby'; this.key = null; this.play(k); return true;
+  },
   get nowPlaying() { if (!track) return null; const file = track.el.src.split('/').pop(); const t = titles.get(file) || {}; return t.title || file; },
   setSongOn(file, on) {
     const off = new Set(bank.state.settings.setlistOff || []);
@@ -192,6 +224,7 @@ export const music = {
   // Next song, please. Fades the current one out quickly and starts another straight away (no gap).
   skip() {
     if (!playlist.length || !audio.musicEnabled) return false;
+    this.userPaused = false;
     const k = this.key || 'lobby';
     this.stop(250); this.key = null;
     this.play(k);
@@ -220,7 +253,7 @@ function tone(ctx, { f = 440, t = 0.1, type = 'sine', vol = 0.2, at = 0, slide =
   g.gain.setValueAtTime(0.0001, ctx.currentTime + at);
   g.gain.exponentialRampToValueAtTime(vol, ctx.currentTime + at + 0.005);
   g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + t);
-  o.connect(g).connect(ctx.destination);
+  o.connect(g).connect(bus());
   o.start(ctx.currentTime + at); o.stop(ctx.currentTime + at + t + 0.02);
 }
 function noise(ctx, { t = 0.08, vol = 0.15, at = 0, hp = 1000 }) {
@@ -231,7 +264,7 @@ function noise(ctx, { t = 0.08, vol = 0.15, at = 0, hp = 1000 }) {
   const s = ctx.createBufferSource(); s.buffer = buf;
   const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp;
   const g = ctx.createGain(); g.gain.value = vol;
-  s.connect(f).connect(g).connect(ctx.destination);
+  s.connect(f).connect(g).connect(bus());
   s.start(ctx.currentTime + at);
 }
 const synth = {

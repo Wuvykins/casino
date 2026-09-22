@@ -12,7 +12,7 @@ import { audio } from '../core/audio.js';
 import { CHARACTERS, characterById } from '../content/characters.js';
 import { pickLine } from '../content/lines.js';
 import { MAX_SEATS } from '../content/tables.js';
-import { showSettings } from './lobby.js';
+import { showSettings, noteButton, icon } from './lobby.js';
 
 // "TOTAL POT" plaque (Nic's design): dark green plate with a gold rim; the amount counts up over 320 ms with an
 // ease-out and the rim flashes gold when the pot grows. Hidden while the pot is empty.
@@ -136,8 +136,8 @@ export class HoldemTable {
     this.handInfo = h('div', { class: 'handinfo' });
     this.actionBar = h('div', { class: 'actionbar hidden' });
     this.nextBar = h('div', { class: 'nextbar hidden' });
-    this.gearBtn = h('button', { class: 'gear-btn', title: 'Settings', onClick: () => { audio.play('tap'); showSettings(this.root, {}, { atTable: true }); } }, '⚙');
-    this.el.append(this.topbar, this.felt, this.handInfo, this.actionBar, this.nextBar, this.gearBtn);
+    this.gearBtn = h('button', { class: 'gear-btn', title: 'Settings', onClick: () => { audio.play('tap'); showSettings(this.root, {}, { atTable: true }); } }, icon('gear'));
+    this.el.append(this.topbar, this.felt, this.handInfo, this.actionBar, this.nextBar, this.gearBtn, noteButton(this.root));
     this.root.append(this.el);
     this.unsubBank = bank.onChange(() => { const b = this.topbar.querySelector('.bank-amt'); if (b) b.textContent = fmt$(bank.state.bank); });
   }

@@ -9,17 +9,17 @@ import { assets } from '../core/assets.js';
 import { audio } from '../core/audio.js';
 import { characterById } from '../content/characters.js';
 import { pickLine } from '../content/lines.js';
-import { showSettings } from './lobby.js';
+import { showSettings, noteButton, icon } from './lobby.js';
 
 const HUMAN = 'you';
 // Nic's painted board (assets/img/table/cribbage-board.png): where the holes are, as percentages of the picture.
 // Each lane has two rows of 60 holes (twelve groups of five): 1-60 left to right along the top row, 61-120 back along the bottom.
-const BOARD_ART = {
-  holeX: [11.085, 12.346, 13.608, 14.869, 16.13, 17.766, 19.027, 20.288, 21.55, 22.811, 24.446, 25.708, 26.969, 28.23, 29.491, 31.127, 32.388, 33.649, 34.911, 36.172, 37.807, 39.069, 40.33, 41.591, 42.852, 44.488, 45.749, 47.011, 48.272, 49.533, 51.169, 52.43, 53.691, 54.952, 56.214, 57.849, 59.11, 60.372, 61.633, 62.894, 64.53, 65.791, 67.052, 68.313, 69.575, 71.21, 72.472, 73.733, 74.994, 76.255, 77.891, 79.152, 80.413, 81.675, 82.936, 84.571, 85.833, 87.094, 88.355, 89.616],
-  rowY: [26.5, 40.7, 59.3, 73.8],           // lane 0 top, lane 0 bottom, lane 1 top, lane 1 bottom
-  startX: 9.85,       // the start holes drilled into the art before hole 1: top row = start, bottom row = second start / game hole (121)
-  plate: { left: 1.2, width: 7.6, tops: [10, 50], height: 40 },   // name plates
-  window: { left: 93.6, width: 5, tops: [14, 57], height: 29 },   // score windows
+const BOARD_ART = {   // Nic's walnut-and-emerald board (2026-09-22), re-drilled to 60 holes a row by tools/drill_board.py; % of the picture
+  holeX: [17.245, 18.383, 19.522, 20.661, 21.799, 23.451, 24.589, 25.728, 26.867, 28.005, 29.657, 30.795, 31.934, 33.073, 34.212, 35.863, 37.001, 38.14, 39.279, 40.418, 42.069, 43.207, 44.346, 45.485, 46.624, 48.275, 49.413, 50.552, 51.691, 52.83, 54.481, 55.619, 56.758, 57.897, 59.036, 60.687, 61.825, 62.964, 64.103, 65.242, 66.893, 68.031, 69.17, 70.309, 71.448, 73.099, 74.237, 75.376, 76.515, 77.654, 79.305, 80.443, 81.582, 82.721, 83.86, 85.511, 86.649, 87.788, 88.927, 90.066],
+  rowY: [23.94, 35.77, 63.38, 75.21],       // lane 0 out (0->60), lane 0 back (61->120), lane 1 out, lane 1 back
+  start: [[{ x: 12.605, y: 31.55 }, { x: 14.339, y: 31.55 }], [{ x: 12.605, y: 70.99 }, { x: 14.339, y: 70.99 }]],   // the two START holes per lane, side by side
+  plate: { left: 1.64, width: 9.18, tops: [9.93, 54.64], height: 34.1 },    // name plates: the painted boxes (30–133 / 165–268 of 302)
+  window: { left: 91.85, width: 6.5, tops: [9.93, 53.97], height: 35.1 },   // score windows (30–135 / 163–270)
 };
 
 // Nic's cribbage SCENE (assets/img/table/felt-cribbage.jpg, the whole screen, board built in): the holes, measured
@@ -50,6 +50,7 @@ export class CribbageTable {
   get speed() { return bank.state.settings.aiSpeed || 1; }
   wait(ms) { return sleep(ms / this.speed); }
   nameOf(id) { return id === HUMAN ? this.name : this.char.name; }
+  boardName(id) { return id === HUMAN ? 'You' : this.char.name; }   // scoreboard rows: 'You' vs the opponent (both can be called Nic)
   poss(id, lower = false) { return id === HUMAN ? (lower ? 'your' : 'Your') : `${this.char.name}'s`; }
 
   // ---------- DOM ----------
@@ -89,8 +90,8 @@ export class CribbageTable {
     this.felt.append(this.oppEl, this.oppHand, this.msgEl, this.centerEl, this.deckEl, this.cribEl, this.dealerTag, this.handEl, this.youPlate);
     if (!this.scene) this.felt.prepend(this.boardEl);
     this.actionBar = h('div', { class: 'actionbar cb-actions hidden' });
-    this.gearBtn = h('button', { class: 'gear-btn', title: 'Settings', onClick: () => { audio.play('tap'); showSettings(this.root, {}, { atTable: true }); } }, '⚙');
-    this.el.append(this.topbar, this.felt, this.actionBar, this.gearBtn);
+    this.gearBtn = h('button', { class: 'gear-btn', title: 'Settings', onClick: () => { audio.play('tap'); showSettings(this.root, {}, { atTable: true }); } }, icon('gear'));
+    this.el.append(this.topbar, this.felt, this.actionBar, this.gearBtn, noteButton(this.root));
     if (this.scene) this.el.append(this.boardEl);   // over the painted board (scene-board: in % of the whole screen; art: sized to cover it)
     this.root.append(this.el);
     this.unsubBank = bank.onChange(() => { const b = this.topbar.querySelector('.bank-amt'); if (b) b.textContent = fmt$(bank.state.bank); });
@@ -113,7 +114,7 @@ export class CribbageTable {
     this.boardEl.classList.add('scene-board');
     const S = SCENE;
     const hx = (i) => S.x0 + S.dx * i;
-    this.plateFit = (id) => { const n = this.nameOf(id); return n.length > 7 ? n.slice(0, 7) : n; };
+    this.plateFit = (id) => { const n = this.boardName(id); return n.length > 7 ? n.slice(0, 7) : n; };
     this.holePos = (lane, s) => {
       const out = S.rowY[lane * 2], back = S.rowY[lane * 2 + 1];
       if (s < 0) return { x: hx(-1), y: out };            // the start slot, before hole 0
@@ -132,7 +133,7 @@ export class CribbageTable {
       };
       this.pegEls[id] = { back: mk('back'), front: mk('front') };
       this.pegEls[id].back.style.left = hx(-1) + '%';       // the trailing peg waits in the start slot before hole 0
-      this.boardEl.append(h('div', { class: 'cb-plate' + (id === HUMAN ? ' you' : ' opp'), style: { left: S.plate.left + '%', width: S.plate.width + '%', top: S.plate.tops[lane] + '%', height: S.plate.height + '%' }, title: this.nameOf(id) }, this.nameOf(id)));
+      this.boardEl.append(h('div', { class: 'cb-plate' + (id === HUMAN ? ' you' : ' opp'), style: { left: S.plate.left + '%', width: S.plate.width + '%', top: S.plate.tops[lane] + '%', height: S.plate.height + '%' }, title: this.nameOf(id) }, this.boardName(id)));
       this.boardEl.append(this.scoreEls[id] = h('div', { class: 'cb-window' + (id === HUMAN ? ' you' : ' opp'), style: { left: S.window.left + '%', width: S.window.width + '%', top: S.window.tops[lane] + '%', height: S.window.height + '%' } }, '0'));
     }
   }
@@ -144,11 +145,11 @@ export class CribbageTable {
     // score -> position on the picture, in %
     this.holePos = (lane, s) => {
       const top = A.rowY[lane * 2], bot = A.rowY[lane * 2 + 1];
-      if (s < 0) return { x: A.startX, y: bot };          // the second start hole, under the first
-      if (s === 0) return { x: A.startX, y: top };
+      if (s < 0) return A.start[lane][1];                  // the second START hole (the back peg before play)
+      if (s === 0) return A.start[lane][0];
       if (s <= 60) return { x: A.holeX[Math.round((s - 1) / 59 * (n - 1))], y: top };
       if (s <= 120) return { x: A.holeX[n - 1 - Math.round((s - 61) / 59 * (n - 1))], y: bot };
-      return { x: A.startX, y: bot };
+      return A.start[lane][0];                              // 121: pegged out — home
     };
     for (const id of lanes) {
       const lane = this.laneOf(id);
@@ -160,7 +161,7 @@ export class CribbageTable {
       };
       this.pegEls[id] = { back: mk('back'), front: mk('front') };
       this.pegEls[id].back.style.left = this.holePos(lane, -1).x + '%';
-      this.boardEl.append(h('div', { class: 'cb-plate' + (id === HUMAN ? ' you' : ' opp'), style: { left: A.plate.left + '%', width: A.plate.width + '%', top: A.plate.tops[lane] + '%', height: A.plate.height + '%' } }, this.nameOf(id)));
+      this.boardEl.append(h('div', { class: 'cb-plate' + (id === HUMAN ? ' you' : ' opp'), style: { left: A.plate.left + '%', width: A.plate.width + '%', top: A.plate.tops[lane] + '%', height: A.plate.height + '%' } }, this.boardName(id)));
       this.boardEl.append(this.scoreEls[id] = h('div', { class: 'cb-window' + (id === HUMAN ? ' you' : ' opp'), style: { left: A.window.left + '%', width: A.window.width + '%', top: A.window.tops[lane] + '%', height: A.window.height + '%' } }, '0'));
     }
   }
@@ -205,7 +206,7 @@ export class CribbageTable {
       for (const k of ['back', 'front']) { this.pegEls[id][k].setAttribute('cx', pos.x); this.pegEls[id][k].setAttribute('cy', pos.y); }
     }
     const labels = h('div', { class: 'cb-board-labels' },
-      ...lanes.map((id) => h('div', { class: 'cb-lane-label' + (id === HUMAN ? ' you' : ' opp') }, h('span', { class: 'who' }, this.nameOf(id)), this.scoreEls[id] = h('b', { class: 'sc' }, '0'))),
+      ...lanes.map((id) => h('div', { class: 'cb-lane-label' + (id === HUMAN ? ' you' : ' opp') }, h('span', { class: 'who' }, this.boardName(id)), this.scoreEls[id] = h('b', { class: 'sc' }, '0'))),
     );
     this.boardEl.append(svg, labels);
   }
@@ -245,8 +246,9 @@ export class CribbageTable {
   waitDeal() {
     if (!this.scene) return this.waitButton('Deal');
     return new Promise((resolve) => {
-      const btn = h('button', { class: 'act raise cb-deal-mid', onClick: () => { audio.play('tap'); btn.remove(); resolve(); } }, 'Deal');
+      const btn = h('button', { class: 'act raise cb-deal-mid', onClick: () => { audio.play('tap'); btn.remove(); this.el.classList.remove('deal-ready'); resolve(); } }, 'Deal');
       this.felt.append(btn);
+      this.el.classList.add('deal-ready');                          // the status line ("Kurtis deals first") sits right under the button
       requestAnimationFrame(() => btn.classList.add('show'));
     });
   }
@@ -297,7 +299,8 @@ export class CribbageTable {
     while (game.phase !== 'over' && !this.stopped) {
       await this.playHand(game);
       if (this.stopped || game.phase === 'over') break;
-      if (this.leaving) { this.say('Finishing the game, then we go.'); }
+      if (this.leaving) this.say('Finishing the game, then we go.');
+      else this.say(`${this.nameOf(game.pone)} deal${game.pone === HUMAN ? '' : 's'} next.`);   // the count is done; the deal passes to the pone
       await this.waitDeal();
     }
     if (this.stopped) return;

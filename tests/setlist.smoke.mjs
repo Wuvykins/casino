@@ -25,8 +25,13 @@ await page.waitForSelector('#splash.ready', { timeout: 8000 }).then(() => page.t
 await page.waitForSelector('input[placeholder*="call you"]', { timeout: 10000 });
 await page.fill('input[placeholder*="call you"]', 'Nic'); await page.click("text=Let's play"); await page.waitForSelector('.lobby');
 await page.waitForTimeout(1500);
-await page.click('.lobby button:has-text("Settings")'); await page.waitForSelector('.modal');
-await page.click('.modal button:has-text("Setlist")'); await page.waitForSelector('.setlist-row');
+await page.screenshot({ path: 'tests/shots/lobby-radio.png' });
+console.log('radio:', await page.$eval('.radio-title', (e) => e.textContent), '/', await page.$eval('.radio-artist', (e) => e.textContent));
+await page.click('.radio-btn[title="Pause / play"]'); await page.waitForTimeout(600); console.log('after pause:', await page.$eval('.radio-btn[title="Pause / play"]', (e) => e.textContent), await page.$eval('.radio-artist', (e) => e.textContent));
+await page.click('.radio-btn[title="Pause / play"]'); await page.waitForTimeout(600); console.log('after resume:', await page.$eval('.radio-btn[title="Pause / play"]', (e) => e.textContent));
+await page.click('.radio-btn[title="Next song"]'); await page.waitForTimeout(900); console.log('after skip:', await page.$eval('.radio-title', (e) => e.textContent));
+await page.click('.radio-head'); await page.waitForSelector('.modal'); await page.screenshot({ path: 'tests/shots/radio-modal.png' }); await page.click('.modal .modal-buttons button:has-text("Done")'); await page.waitForTimeout(300);
+await page.click('.radio-btn.wide'); await page.waitForSelector('.setlist-row'); await page.waitForTimeout(500);
 const rows = await page.$$eval('.setlist-row', (r) => r.length);
 const titles = await page.$$eval('.setlist-title', (r) => r.slice(12, 16).map((x) => x.textContent));
 console.log('setlist rows:', rows, titles);
@@ -35,16 +40,16 @@ await page.click('.setlist-row:nth-child(14) input'); await page.waitForTimeout(
 const off = await page.evaluate(() => JSON.parse(localStorage.getItem('casino.save.v1')).settings.setlistOff);
 console.log('off after one toggle:', JSON.stringify(off));
 await page.click('.setlist-row:nth-child(16) .setlist-play'); await page.waitForTimeout(700);
-const now = await page.$eval('.setlist-now', (e) => e.textContent);
+const now = await page.$eval('.now-playing', (e) => e.textContent).catch(() => 'none');
 console.log('now:', now);
 const playing = await page.$eval('.setlist-row.playing .setlist-title', (e) => e.textContent).catch(() => null);
 console.log('playing row:', playing);
 // switch everything off
 for (let i = 1; i <= rows; i++) { const on = await page.$eval(`.setlist-row:nth-child(${i}) input`, (e) => e.checked); if (on) await page.click(`.setlist-row:nth-child(${i}) input`); }
 await page.waitForTimeout(800);
-console.log('all off:', await page.$eval('.setlist-now', (e) => e.textContent), '| debug:', JSON.stringify(await page.evaluate(async () => (await import('/js/core/audio.js')).music.debug())));
+console.log('all off:', await page.$$eval('.setlist-row.playing', (r) => r.length), 'playing rows | debug:', JSON.stringify(await page.evaluate(async () => (await import('/js/core/audio.js')).music.debug())));
 await page.click('.setlist-row:nth-child(20) input'); await page.waitForTimeout(800);
-console.log('one back on:', await page.$eval('.setlist-now', (e) => e.textContent));
+console.log('one back on:', await page.$eval('.setlist-row.playing .setlist-title', (e) => e.textContent).catch(() => 'none'));
 await page.screenshot({ path: 'tests/shots/setlist-2.png' });
 console.log(errors.length ? errors.join('\n') : 'no page errors');
 await browser.close(); server.close();
