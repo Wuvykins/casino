@@ -115,7 +115,7 @@ export class HoldemTable {
     else this.felt.append(h('div', { class: 'rail' }), this.boardEl, h('div', { class: 'under-board' }, this.potEl, this.plaque.el, this.msgEl));
     this.seatEls = {};
     for (const s of this.seats) {
-      const pos = SEAT_POS[s.seat];
+      const pos = s.isHuman && !tall ? { x: 39, y: 99 } : SEAT_POS[s.seat];   // phones: your cards a little further left, clear of the tray
       const seatEl = h('div', { class: 'seat' + (s.isHuman ? ' human' : '') + (pos.x > 50 ? ' right' : ''), style: { left: pos.x + '%', top: pos.y + '%' }, dataset: { pos: pos.y < 30 ? 'top' : 'bottom' } });
       const portrait = s.isHuman ? playerAvatarEl(s.name) : portraitEl(s.char, { size: 'md' });
       const cards = h('div', { class: 'holecards' });

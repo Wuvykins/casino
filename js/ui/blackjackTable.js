@@ -84,7 +84,7 @@ export class BlackjackTable {
     this.seatEls = {};
     for (const s of this.seats) {
       const pos = spots[s.spot];
-      const seatEl = h('div', { class: 'bj-seat' + (s.isHuman ? ' human' : ''), style: { left: pos.x + '%', top: pos.y + '%' } });
+      const seatEl = h('div', { class: 'bj-seat' + (s.isHuman ? ' human' : pos.x > 50 ? ' right' : ' left'), style: { left: pos.x + '%', top: pos.y + '%' } });
       const hands = h('div', { class: 'bj-hands' });
       const betEl = h('div', { class: 'bj-bet' });
       const plate = h('div', { class: 'nameplate' }, h('div', { class: 'pname' }, s.name), h('div', { class: 'pstack' }, fmt$(s.stack)));

@@ -152,6 +152,9 @@ body.portrait #rotate { display: grid; }
 .note-btn { position: absolute; right: calc(12px + var(--safe-r)); bottom: calc(var(--gear) + 22px + var(--safe-b)); width: var(--gear); height: var(--gear); border-radius: 50%; border: 2px solid #d9b95c; background: radial-gradient(circle at 50% 30%, #0b3a21, #031a0e 75%); color: #f0cd6e; font-size: clamp(22px, 7vh, 30px); display: grid; place-items: center; z-index: 11; box-shadow: inset 0 1px 0 rgba(255,240,190,.35), inset 0 -2px 3px rgba(0,0,0,.5), 0 0 0 1px #6f561f, 0 4px 12px rgba(0,0,0,.5); }
 .note-btn:active { transform: scale(.94); }
 .gear-btn .ico, .note-btn .ico { font-size: clamp(24px, 7.5vh, 32px); width: 1em; height: 1em; }
+/* blackjack: the bottom-right corner belongs to a player's portrait, so the two buttons sit at the top right instead */
+.bj .note-btn { bottom: auto; top: calc(24% + var(--safe-t)); right: calc(12px + var(--safe-r)); }
+.bj .gear-btn { bottom: auto; top: calc(24% + var(--gear) + 10px + var(--safe-t)); right: calc(12px + var(--safe-r)); }
 /* blackjack: stacked at the right edge (music above settings) so the dealer's-end portrait stays clear; a little breathing room from the edges for thumbs */
 
 .hotspots { position: absolute; inset: 0; }
@@ -268,7 +271,7 @@ body.portrait #rotate { display: grid; }
 /* phones: your hole cards sit under the middle of the board, so the row stays to their right — and the message wraps instead of being cut */
 .plaque-below .under-board { left: 52.5%; transform: translate(0, calc(var(--card-h) * .5 + 6px)); width: 27vw; max-width: none; justify-content: center; flex-wrap: wrap; gap: 6px 8px; white-space: normal; z-index: 4; }
 .plaque-below .under-board .table-msg { white-space: normal; overflow: visible; text-overflow: clip; text-align: center; line-height: 1.2; font-size: clamp(13px, 3.3vh, 17px); }
-.plaque-below .pot-plaque { position: static; transform: none; flex: none; padding: 2px clamp(12px, 2.6vh, 18px); min-width: clamp(84px, 17vh, 130px); }
+.plaque-below .pot-plaque { position: relative; transform: none; flex: none; padding: 2px clamp(12px, 2.6vh, 18px); min-width: clamp(84px, 17vh, 130px); }
 .plaque-below .pot-plaque:not(.show) { display: none; }
 .plaque-below .pot-plaque .pp-amt { font-size: clamp(18px, 5.6vh, 30px); }
 .board { position: absolute; left: 50%; top: 47%; transform: translate(-50%, -50%); display: flex; gap: calc(var(--card-w) * .1); z-index: 2; }
@@ -898,6 +901,11 @@ label.check { font-family: Georgia, 'Times New Roman', serif; color: #eee5cc; }
   .holdem .act { min-width: clamp(64px, 10vw, 96px); padding: 0 10px; font-size: clamp(15px, 4vh, 20px); }
   .holdem .actionbar.raising { gap: 6px; }
   .bj.has-art .actionbar.betting { padding: 4px 8px 4px 10px; }
+  /* the side players' nameplates move out beside their circles, clear of the betting panel */
+  .bj.has-art .bj-seat.left, .bj.has-art .bj-seat.right { position: absolute; }
+  .bj.has-art .bj-seat.left .nameplate, .bj.has-art .bj-seat.right .nameplate { position: absolute; bottom: 0; margin: 0; white-space: nowrap; }
+  .bj.has-art .bj-seat.left .nameplate { right: calc(100% + 10px); }
+  .bj.has-art .bj-seat.right .nameplate { left: calc(100% + 10px); }
   .bj.has-art .actionbar.betting .rack-chip { width: clamp(34px, 8.5vh, 44px); height: clamp(34px, 8.5vh, 44px); }
   .bj.has-art .actionbar.betting .bet-amt { font-size: clamp(14px, 3.8vh, 18px); padding-right: 12px; }
   .bj.has-art .actionbar.betting .bet-panel { column-gap: 10px; }
