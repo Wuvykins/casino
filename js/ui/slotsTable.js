@@ -105,7 +105,7 @@ export class SlotsTable {
     // sounds: the drum roll plus the reel whir, both cut when the last reel lands (see draw())
     this.stopClips();
     this.spinClip = audio.play('slotspin', { volume: 0.75 });
-    this.cueClip = audio.play('slotreels', { volume: 0.45 }); if (this.cueClip) this.cueClip.loop = true;
+    this.cueClip = audio.play('slotreels', { volume: 0.45, loop: true });
   }
 
   // Plan a reel's automatic stop: the first moment at or after `lower` when its target is exactly BRAKE_ROWS ahead

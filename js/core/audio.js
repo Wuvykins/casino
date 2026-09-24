@@ -21,7 +21,7 @@ export const audio = {
         if (await probeAudio(url)) fileSfx.set(k, url);
       }));
     }
-    const unlock = () => { ctxNow(); unlocked = true; };
+    const unlock = () => { ctxNow(); if (!unlocked) for (const url of fileSfx.values()) bufferFor(url).catch(() => {}); unlocked = true; };   // first tap: decode every effect once
     for (const ev of ['touchstart', 'touchend', 'mousedown', 'keydown']) document.addEventListener(ev, unlock, { once: false, passive: true });
   },
   get enabled() { return bank.state?.settings?.sound !== false; },
@@ -34,7 +34,7 @@ export const audio = {
   play(key, opts = {}) {
     if (!this.enabled) return;
     const file = fileSfx.get(key);
-    if (file) return playClip(file, (opts.volume ?? 0.8) * this.sfxVolume);
+    if (file) return playClip(file, (opts.volume ?? 0.8) * this.sfxVolume, { loop: !!opts.loop });
     if (!ctx || !unlocked) return null;
     try { synth[key]?.(ctx, opts); } catch { /* ignore */ }
     return null;
@@ -53,22 +53,46 @@ export const audio = {
 let sfxBus = null;
 function bus() { const c = ctxNow(); if (!sfxBus) { sfxBus = c.createGain(); sfxBus.connect(c.destination); } sfxBus.gain.value = audio.sfxVolume; return sfxBus; }
 
-// Clips (effects and voice lines) go through WebAudio too — element -> gain -> speakers — because iPhone Safari
-// ignores element.volume, and the volume sliders have to work there. Falls back to a bare element before the
-// first tap (when the context can't run yet). Returns something with pause() so callers can cut a clip short.
-function playClip(url, volume) {
-  const el = new Audio(url);
-  el.volume = Math.min(1, volume);
-  if (ctx && unlocked) {
-    try {
-      const c = ctxNow();
-      const gain = c.createGain(); gain.gain.value = volume;
-      c.createMediaElementSource(el).connect(gain).connect(c.destination);
-      el.volume = 1;
-    } catch { /* keep the plain element */ }
+// Clips (effects and voice lines) play from decoded AudioBuffers: buffer -> gain -> speakers. That gives real volume
+// control on iPhone (Safari ignores element.volume) without leaking anything: v111–v128 made a fresh <audio> element
+// plus a MediaElementSource for every sound, and neither is ever released once wired into the graph — after a minute
+// of play the page held hundreds of them, Safari got laggy and then refused to start new sounds at all (Nic's report).
+// Each file is fetched and decoded once (effects at start-up, voice lines on first use). Before the first tap, when
+// the context can't run yet, a bare element is used instead. Returns a handle with pause() / paused / ended / loop.
+const buffers = new Map();   // url -> AudioBuffer, or the Promise while it decodes
+function bufferFor(url) {
+  if (buffers.has(url)) return buffers.get(url);
+  const c = ctxNow();
+  const p = fetch(url).then((r) => r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.status)))
+    .then((ab) => new Promise((res, rej) => { const q = c.decodeAudioData(ab, res, rej); if (q && q.then) q.then(res, rej); }))
+    .then((buf) => { buffers.set(url, buf); return buf; })
+    .catch((e) => { buffers.delete(url); throw e; });
+  buffers.set(url, p);
+  return p;
+}
+function playClip(url, volume, { loop = false } = {}) {
+  if (!ctx || !unlocked) {   // no running context yet: a plain element (not wired into the graph, so it's collected when it ends)
+    const el = new Audio(url); el.volume = Math.min(1, volume); el.loop = loop; el.play().catch(() => {}); return el;
   }
-  el.play().catch(() => {});
-  return el;
+  const c = ctxNow();
+  const gain = c.createGain(); gain.gain.value = volume; gain.connect(c.destination);
+  let src = null;
+  const handle = {
+    paused: false, ended: false, _loop: loop,
+    get loop() { return this._loop; }, set loop(v) { this._loop = v; if (src) src.loop = v; },
+    pause() { if (this.paused || this.ended) return; this.paused = true; if (src) { try { src.stop(); } catch { /* not started */ } } else finish(); },
+    play() { /* one-shot clips don't resume; here for element-compatibility */ },
+  };
+  const finish = () => { handle.ended = true; try { src?.disconnect(); gain.disconnect(); } catch { /* ignore */ } };
+  const start = (buf) => {
+    if (handle.paused) { finish(); return; }
+    src = c.createBufferSource(); src.buffer = buf; src.loop = handle._loop;
+    src.onended = finish;
+    src.connect(gain); src.start();
+  };
+  const b = buffers.get(url);
+  if (b && !b.then) start(b); else bufferFor(url).then(start, finish);
+  return handle;
 }
 
 // ---------- background music + lobby room sound ----------
