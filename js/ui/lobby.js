@@ -9,6 +9,7 @@ import { cheapestBuyIn } from '../content/tables.js';
 import { BANKER } from '../content/characters.js';
 import { pickLine } from '../content/lines.js';
 import { LOBBY_HOTSPOTS, SHOW_HOTSPOT_GUIDES } from '../content/lobby.js';
+import { VERSION } from '../version.js';
 
 const GAMES = [
   { id: 'holdem', name: "Texas Hold'em", sub: 'Limit & No-Limit', open: true, icon: '♠' },
@@ -266,6 +267,7 @@ export function showSettings(root, ctx, opts = {}) {
               if (ok) { close(); document.dispatchEvent(new Event('casino:exit')); }
             } }, icon('exit'), h('span', {}, 'Exit Game')),
             h('button', { class: 'btn primary', onClick: () => close() }, 'Done')),
+          h('div', { class: 'build-tag' }, VERSION),   // which build this phone has (temporary, until the game is finished)
         ]);
         nameIn.addEventListener('change', () => bank.setName(nameIn.value));
       };

@@ -1,4 +1,4 @@
-// Hold'em. Cash tables (`nolimit`) and Sit & Go tournaments (`tourney`): everyone buys in for the same amount and
+// Hold'em. Cash tables (`nolimit`) and tournaments (`tourney`: The Open, The Classic, The Major, High Roller, Championship): everyone buys in for the same amount and
 // gets the same stack of tournament chips; blinds rise every few hands; bust and you're out; first and second are
 // paid from the prize pool: 4× the entry for first, 2× for second — enough to be worth it, not enough to jump a whole card tier in one go (Nic: 'I don't want to pass up cards'). `tier` is the minimum card tier needed to sit down.
 export const HOLDEM_TABLES = [
@@ -10,11 +10,11 @@ export const HOLDEM_TABLES = [
   // tournaments: minBuy/maxBuy are both the entry fee (the lobby uses them to say what you need in the bank). `luck` scales
   // the hold'em luck system for that tournament (1 = the cash-game amount, 0 = an honest deal): the higher the table, the
   // harder it gets — measured with tests/sng.sim.mjs.
-  { id: 'sng-200',    mode: 'tourney', name: 'Sit & Go $200',         buyIn: 200,    prizes: [800, 400],       chips: 1500, luck: 0.35, minBuy: 200,    maxBuy: 200,    tier: 1 },
-  { id: 'sng-1000',   mode: 'tourney', name: 'Sit & Go $1,000',       buyIn: 1000,   prizes: [4000, 2000],      chips: 1500, luck: 0.25, minBuy: 1000,   maxBuy: 1000,   tier: 2 },
-  { id: 'sng-5000',   mode: 'tourney', name: 'Sit & Go $5,000',       buyIn: 5000,   prizes: [20000, 10000],     chips: 1500, luck: 0.15, minBuy: 5000,   maxBuy: 5000,   tier: 3 },
-  { id: 'sng-20000',  mode: 'tourney', name: 'Sit & Go $20,000',      buyIn: 20000,  prizes: [80000, 40000],   chips: 1500, luck: 0.08, minBuy: 20000,  maxBuy: 20000,  tier: 4 },
-  { id: 'sng-100000', mode: 'tourney', name: 'Championship $100,000', buyIn: 100000, prizes: [400000, 200000],  chips: 1500, luck: 0, minBuy: 100000, maxBuy: 100000, tier: 5 },
+  { id: 'sng-200',    mode: 'tourney', name: 'The Open',         buyIn: 200,    prizes: [800, 400],       chips: 1500, luck: 0.35, minBuy: 200,    maxBuy: 200,    tier: 1 },
+  { id: 'sng-1000',   mode: 'tourney', name: 'The Classic',       buyIn: 1000,   prizes: [4000, 2000],      chips: 1500, luck: 0.25, minBuy: 1000,   maxBuy: 1000,   tier: 2 },
+  { id: 'sng-5000',   mode: 'tourney', name: 'The Major',       buyIn: 5000,   prizes: [20000, 10000],     chips: 1500, luck: 0.15, minBuy: 5000,   maxBuy: 5000,   tier: 3 },
+  { id: 'sng-20000',  mode: 'tourney', name: 'High Roller',      buyIn: 20000,  prizes: [80000, 40000],   chips: 1500, luck: 0.08, minBuy: 20000,  maxBuy: 20000,  tier: 4 },
+  { id: 'sng-100000', mode: 'tourney', name: 'Championship', buyIn: 100000, prizes: [400000, 200000],  chips: 1500, luck: 0, minBuy: 100000, maxBuy: 100000, tier: 5 },
 ];
 // tournament blind schedule (tournament chips), and how many hands each level lasts
 export const TOURNEY_BLINDS = [[10, 20], [15, 30], [25, 50], [50, 100], [75, 150], [100, 200], [150, 300], [200, 400], [300, 600], [400, 800], [500, 1000], [750, 1500], [1000, 2000], [1500, 3000], [2000, 4000]];

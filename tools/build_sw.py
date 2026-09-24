@@ -43,4 +43,6 @@ self.addEventListener('fetch', (e) => {{
 """
 open('sw.js', 'w').write(sw)
 total = sum(os.path.getsize(f) for f in files)
-print(f'sw.js written: version {version}, {len(files)} files, {total/1e6:.1f} MB cached offline')
+import re
+build = re.search(r"VERSION = '(v\d+)'", open('js/version.js').read())
+print(f'sw.js written: version {version}, {len(files)} files, {total/1e6:.1f} MB cached offline — js/version.js says {build.group(1) if build else "?"} (bump it before zipping)')

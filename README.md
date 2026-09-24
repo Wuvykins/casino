@@ -2,7 +2,7 @@
 
 A private, Hoyle-Casino-style casino for the phone. Vanilla HTML/JS, no build step, one save on the device.
 
-**Live now:** lobby, bank and five credit-card tiers, Ken's bailout, Texas Hold'em (no-limit cash tables and Sit & Go tournaments — everyone starts with 1,500 chips, blinds climb, bust and you're out, first and second are paid) with personality-driven opponents, Blackjack (6 decks, dealer stands on 17, 3:2, double any two, double after split, split to 4 hands, insurance) with up to two of the family playing beside you, two-handed Cribbage (first to 121, a stake per game, skunks pay double and triple), Farkle (first to 10,000, up to three opponents), and the Van Halen slot machine (skill-stop reels, Hot for Teacher on the pull, Jump on a jackpot — and the house is generous: about one spin in twenty hits).
+**Live now:** lobby, bank and five credit-card tiers, Ken's bailout, Texas Hold'em (no-limit cash tables and five tournaments, The Open through the Championship — everyone starts with 1,500 chips, blinds climb, bust and you're out, first and second are paid) with personality-driven opponents, Blackjack (6 decks, dealer stands on 17, 3:2, double any two, double after split, split to 4 hands, insurance) with up to two of the family playing beside you, two-handed Cribbage (first to 121, a stake per game, skunks pay double and triple), Farkle (first to 10,000, up to three opponents), and the Van Halen slot machine (skill-stop reels, Hot for Teacher on the pull, Jump on a jackpot — and the house is generous: about one spin in twenty hits).
 
 ## Put it on your phone (the real thing)
 

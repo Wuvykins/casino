@@ -1,4 +1,4 @@
-// How often does the person win a Sit & Go? Plays thousands of tournaments with the real engine, AI and blind
+// How often does the person win a tournament? Plays thousands of tournaments with the real engine, AI and blind
 // schedule (incl. the knockout bump) and the luck system, with the human played by a stand-in persona.
 //   node tests/sng.sim.mjs [tournaments=2000] [opponents=5] [humanSkill=average|weak|good|shark]
 import { Hand } from '../js/core/poker.js';

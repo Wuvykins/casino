@@ -941,3 +941,4 @@ label.check { font-family: Georgia, 'Times New Roman', serif; color: #eee5cc; }
 .champ-prize { font-size: clamp(24px, 8.5vh, 48px); font-weight: 700; color: #f0cf73; line-height: 1.1; }
 .champ-collect { margin-top: clamp(6px, 2vh, 12px); min-width: 46%; }
 @media (max-height: 460px) { .champ-plaque { top: 54%; padding-top: clamp(20px, 7vh, 30px); } .champ-trophy { transform: translate(-50%, -62%); } }
+.build-tag { text-align: center; font-size: 11px; letter-spacing: .12em; color: rgba(244,238,220,.45); margin-top: 8px; margin-bottom: -4px; }

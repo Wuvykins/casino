@@ -1,4 +1,4 @@
-// Headless smoke test for a Sit & Go: lobby → hold'em → tournament tile → 2 opponents → play to a finish (all-in a lot to
+// Headless smoke test for a tournament (The Open): lobby → hold'em → tournament tile → 2 opponents → play to a finish (all-in a lot to
 // make it quick) → the result modal → back in the lobby with the bank changed by exactly -entry (+prize).
 import { chromium } from 'playwright';
 import http from 'node:http';
@@ -29,7 +29,7 @@ await page.reload(); await enter(); await page.waitForSelector('.lobby');
 const bank0 = await page.evaluate(() => JSON.parse(localStorage.getItem('casino.save.v1')).bank);
 await page.click('button.hotspot[data-game="holdem"]'); await page.waitForSelector('.select-screen');
 await page.screenshot({ path: 'tests/shots/sng-select.png' });
-await page.click('.table-tile:has-text("Sit & Go $200")'); await page.waitForSelector('.modal button:has-text("Sit down")');
+await page.click('.table-tile:has-text("The Open")'); await page.waitForSelector('.modal button:has-text("Sit down")');
 // exactly two opponents
 for (let i = 0; i < 6; i++) { const on = await page.$('.cast-tile.on'); if (!on) break; await on.click(); await page.waitForTimeout(80); }   // the grid re-renders on every tap
 await page.click('.cast-tile:nth-child(1)'); await page.waitForTimeout(80); await page.click('.cast-tile:nth-child(2)'); await page.waitForTimeout(80);

@@ -74,7 +74,7 @@ export class HoldemTable {
     this.pendingHuman = null;
     this.reads = {};
     this.humanStats = { hands: 0, vpip: 0, aggr: 0, passive: 0 };
-    // Sit & Go: everyone gets the same stack of tournament chips, the entry fee is spent, blinds rise, busting = out
+    // Tournament: everyone gets the same stack of tournament chips, the entry fee is spent, blinds rise, busting = out
     this.tourney = table.mode === 'tourney';
     this.fmt = this.tourney ? fmtChips : fmt$;
     this.level = 0; this.levelBoost = 0; this.payout = 0; this.placed = 0;   // levelBoost: one extra blind level per player knocked out
