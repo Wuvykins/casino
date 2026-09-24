@@ -158,7 +158,6 @@ export class HoldemTable {
 
   // ---------- main loop ----------
   async run() {
-    audio.play('shuffle');
     this.say(null, this.tourney ? `Welcome to the ${this.table.name}. ${fmtChips(this.table.chips)} chips each, blinds ${fmtChips(this.game.sb)}/${fmtChips(this.game.bb)} — last two standing get paid.` : `Welcome to ${this.table.name}. Blinds ${fmt$(this.table.sb)}/${fmt$(this.table.bb)}.`);
     await this.wait(600);
     for (const s of this.seats.slice(1)) if (this.talk(s, 'greet', {}, 0.5)) await this.wait(500);
@@ -223,7 +222,9 @@ export class HoldemTable {
         if (action.type === 'raise' || action.type === 'allin') this.humanStats.aggr++; else if (action.type === 'call') this.humanStats.passive++;
       } else {
         action = decide(hand, p, seat.char.persona, seat.mood, this.rng, this.reads);
-        await this.wait(thinkTime(action, legal, this.rng));
+        // once you've folded, the others still play it out at a watchable pace (Nic: 'felt like it all happened at once')
+        const humanOut = !!hand.players.find((x) => x.id === HUMAN)?.folded;
+        await this.wait(Math.max(thinkTime(action, legal, this.rng), humanOut ? 1000 : 0));
         if (this.stopped) return;
       }
       hand.act(p.id, action);
@@ -279,6 +280,7 @@ export class HoldemTable {
           this.seatEls[this.seatById(ev.button).id].dealer.classList.add('show');
           this.renderMoney();
           for (const p of ev.players) clear(this.seatEls[p.id].cards);
+          audio.play('shuffle', { volume: 0.8 }); await this.wait(1750);   // riffle, bridge, tap — then the cards go out (Nic's shuffle clip)
           // one card at a time, around the table, like a real deal
           for (let round = 0; round < 2; round++) {
             for (const p of ev.players) {
@@ -300,7 +302,7 @@ export class HoldemTable {
         }
         case 'street': {
           this.renderMoney();
-          await this.wait(450);
+          await this.wait(600);
           for (const c of ev.cards) {
             const el = cardEl(c); el.classList.add('dealt');
             this.boardEl.append(el); audio.play('deal');
@@ -519,7 +521,7 @@ export class HoldemTable {
       const bar = this.actionBar; clear(bar); bar.classList.remove('hidden', 'raising');
       const done = (a) => { bar.classList.add('hidden'); bar.classList.remove('raising'); clear(bar); clearTimeout(this.hurryT); this.pendingHuman = null; resolve(a); };
       const p = this.hand.players.find((x) => x.id === HUMAN);
-      const btn = (label, cls, fn) => h('button', { class: 'act ' + cls, onClick: () => { audio.play('tap'); fn(); } }, label);
+      const btn = (label, cls, fn) => h('button', { class: 'act ' + cls, onClick: fn }, label);   // no click here: fold/check/call/raise each have their own sound the moment they land
       bar.append(btn('Fold', 'fold', () => done({ type: 'fold' })));
       if (legal.canCheck) bar.append(btn('Check', 'check', () => done({ type: 'check' })));
       else bar.append(btn(['Call ', h('span', { class: 'amt' }, this.fmt(legal.callAmount))], 'call', () => done({ type: 'call' })));
@@ -548,7 +550,7 @@ export class HoldemTable {
     const confirm = h('button', { class: 'act raise' }, '');
     const set = (v) => { to = Math.min(legal.maxRaiseTo, Math.max(legal.minRaiseTo, Math.round(v / step) * step)); slider.value = to; amt.textContent = this.fmt(to); confirm.textContent = to >= legal.maxRaiseTo ? `All in ${this.fmt(to)}` : `${legal.isBet ? 'Bet' : 'Raise to'} ${this.fmt(to)}`; };
     slider.addEventListener('input', () => set(+slider.value));
-    confirm.addEventListener('click', () => { audio.play('tap'); done({ type: 'raise', amount: to }); }); // the chip sound plays when the raise lands
+    confirm.addEventListener('click', () => done({ type: 'raise', amount: to })); // the chip sound plays when the raise lands
     const presets = h('div', { class: 'presets' },
       h('button', { class: 'pre', onClick: () => set(legal.minRaiseTo) }, 'Min'),
       h('button', { class: 'pre', onClick: () => set(preset(0.5)) }, '½ Pot'),
@@ -605,7 +607,8 @@ export class HoldemTable {
       const s = losers.length ? this.rng.pick(losers) : null;
       if (s) setTimeout(() => this.talk(s, 'playerWin', {}, 0.5), 900);
     }
-    if (humanNet < 0 && !humanWon && !this.lossSoundPlayed) audio.play('lose', { volume: 0.4 });
+    const humanFolded = !!hand.players.find((p) => p.id === HUMAN)?.folded;
+    if (humanNet < 0 && !humanWon && !humanFolded && !this.lossSoundPlayed) audio.play('lose', { volume: 0.4 });   // folding isn't losing: no sound for blinds or bets you let go of (Nic)
     this.lossSoundPlayed = false;
     await this.wait(1600);
   }

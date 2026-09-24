@@ -163,6 +163,14 @@ const exitGame = () => {
   setTimeout(() => { if (!document.hidden) closedScreen(); }, 350);   // still here? the platform wouldn't close us
 };
 document.addEventListener('casino:exit', exitGame);
+// The menu-style buttons (.btn: Back, Done, Min/Half/Max, Shuffle, modal buttons, Leave table) and the player tiles click
+// when pressed (Nic: Back had no sound). Table actions — fold/check/call/raise, bet chips, dice, cards, the slot machine —
+// make their own sounds and are left alone; audio.play also drops a tap that lands on top of another effect.
+document.addEventListener('click', (e) => {
+  const b = e.target.closest?.('button');
+  if (!b || b.disabled || b.closest('.actionbar, .slot-hit, .fk-dice, .cb-hand')) return;
+  if (b.matches('.btn:not(.act), .cast-tile')) audio.play('tap');
+});
 
 // Phone locked or app put away: after a while away the game goes back to the title on its own rather than
 // resuming a hand from an hour ago (a quick switch to a message and back is left alone).

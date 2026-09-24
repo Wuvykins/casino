@@ -129,7 +129,6 @@ export class BlackjackTable {
 
   // ---------- main loop ----------
   async run() {
-    audio.play('shuffle');
     this.say(`Welcome to ${this.table.name}. Place your bet.`);
     for (const s of this.seats) if (!s.isHuman && this.talk(s, 'greet', {}, 0.6)) await this.wait(500);
     while (!this.stopped) {
@@ -201,7 +200,7 @@ export class BlackjackTable {
     const players = this.seats.map((s) => ({ id: s.id, bet: s.bet }));
     for (const s of this.seats) { s.stack -= s.bet; this.updateStack(s); }
     const round = new Round({ shoe: this.shoe, players });
-    this.round = round; this.cursor = 0;
+    this.round = round; this.cursor = 0; this.lastActor = null;
     this.say('');
     if (!this.shoe.needsShuffle && this.rng.chance(LUCK.bjDeal)) bjLuckyDeal(this.shoe, players.length, players.findIndex((p) => p.id === HUMAN), this.rng);
     round.deal();
@@ -226,7 +225,8 @@ export class BlackjackTable {
       const legal = round.legal();
       const affordable = { ...legal, double: legal.double && seat.stack >= hand.bet, split: legal.split && seat.stack >= hand.bet };
       let action;
-      if (seat.isHuman) action = await this.awaitHuman(affordable, hand);
+      const fresh = this.lastActor !== seat.id; this.lastActor = seat.id;   // the your-turn chime only when the turn has just come round to you, not after every hit
+      if (seat.isHuman) action = await this.awaitHuman(affordable, hand, fresh);
       else { action = aiDecide(hand.cards, round.dealerUp, affordable, seat.char.persona, this.rng); await this.wait(650 + this.rng.next() * 700); }
       if (this.stopped) return;
       if (action === 'double' || action === 'split') { seat.stack -= hand.bet; this.updateStack(seat); }
@@ -258,9 +258,9 @@ export class BlackjackTable {
     });
   }
 
-  awaitHuman(legal, hand) {
+  awaitHuman(legal, hand, fresh = true) {
     return new Promise((resolve) => {
-      audio.play('yourturn');
+      if (fresh) audio.play('yourturn');
       const bar = this.actionBar; clear(bar); bar.classList.remove('hidden');
       const done = (a) => { bar.classList.add('hidden'); clear(bar); resolve(a); };
       const btn = (label, cls, ok, a) => h('button', { class: 'act ' + cls, disabled: !ok, onClick: () => { audio.play(a === 'hit' ? 'deal' : a === 'stand' ? 'check' : 'chips'); done(a); } }, label);
@@ -287,7 +287,7 @@ export class BlackjackTable {
     while (this.cursor < r.events.length) {
       const ev = r.events[this.cursor++];
       switch (ev.type) {
-        case 'shuffle': this.say('Shuffling a fresh shoe.'); audio.play('shuffle'); await this.wait(700); break;
+        case 'shuffle': this.say('Shuffling a fresh shoe.'); audio.play('shuffle', { volume: 0.8 }); await this.wait(1750); break;   // the clip runs ~1.5 s; the first card waits for the tap
         case 'card': {
           if (ev.playerId === 'dealer') {
             const row = this.dealerEl.querySelector('.bj-cards');

@@ -8,6 +8,15 @@ KEEP = ('.html', '.css', '.js', '.webmanifest', '.json', '.png', '.jpg', '.jpeg'
 # Songs stream from the network and stay out of the offline cache: 25+ of them is more than iOS will reliably hold in
 # the Cache API, and one failed download would fail the whole install. Everything else (room loop, sfx, voices) is cached.
 STREAM = lambda f: f.startswith('assets/music/song-')
+# assets/manifest.json: which sound files exist, so the game doesn't have to probe for them at start-up (iPhone probes
+# time out while a new build is downloading, and the game then falls back to its synth placeholders — Nic, v142).
+import re as _re
+def _num(f): m = _re.search(r'(\d+)', f); return int(m.group(1)) if m else 0
+manifest = {
+    'sfx': sorted(f for f in os.listdir('assets/sfx') if f.lower().endswith(('.mp3', '.m4a', '.wav'))),
+    'music': sorted((f for f in os.listdir('assets/music') if f.lower().endswith(('.mp3', '.m4a'))), key=_num),
+}
+json.dump(manifest, open('assets/manifest.json', 'w'), indent=0)
 files = ['index.html', 'manifest.webmanifest']
 for top in ('css', 'js', 'assets'):
     for d, _, fs in os.walk(top):

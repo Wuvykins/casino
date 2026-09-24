@@ -273,7 +273,6 @@ export class CribbageTable {
 
   // ---------- main loop ----------
   async run() {
-    audio.play('shuffle');
     this.say(`Welcome, ${this.name}. First to 121.`);
     await this.wait(400); this.talk('greet', {}, 0.7);
     while (!this.stopped) {
@@ -314,8 +313,8 @@ export class CribbageTable {
     game.deal();
     this.clearHandUI();
     this.renderDealerTag(game);
-    audio.play('shuffle');
-    await this.wait(300);
+    audio.play('shuffle', { volume: 0.8 });
+    await this.wait(1750);   // riffle, bridge, tap — then the cards go out (one shuffle per hand; the sit-down one is gone)
     await this.dealAnimation(game);
     // discard
     this.say(`Two to ${this.poss(game.dealer, true)} crib.`);
@@ -330,11 +329,13 @@ export class CribbageTable {
     if (game.phase === 'over') return;
     // pegging
     this.renderHand(game, { pegging: true });
+    let lastTurn = null;
     while (game.phase === 'pegging' && !this.stopped) {
       const who = game.turn;
       this.setActing(who);
       let card;
-      if (who === HUMAN) card = await this.awaitPlay(game);
+      const fresh = lastTurn !== who; lastTurn = who;   // after a 'go' you play again: no second chime
+      if (who === HUMAN) card = await this.awaitPlay(game, fresh);
       else { await this.wait(650 + this.rng.next() * 600); card = choosePlay(game, this.opp, this.char.persona, this.rng); }
       if (this.stopped) return;
       game.play(who, card);
@@ -463,7 +464,7 @@ export class CribbageTable {
   awaitDiscard(game) {
     return new Promise((resolve) => {
       let selected = [];
-      const btn = h('button', { class: 'act raise', disabled: true, onClick: () => { audio.play('chips'); this.handEl.onclick = null; this.hideButtons(); resolve(selected); } }, 'Send to crib');
+      const btn = h('button', { class: 'act raise', disabled: true, onClick: () => { this.handEl.onclick = null; this.hideButtons(); resolve(selected); } }, 'Send to crib');
       const refresh = () => { this.renderHand(game, { selected }); btn.disabled = selected.length !== 2; btn.textContent = selected.length === 2 ? 'Send to crib' : `Pick ${2 - selected.length} more`; };
       this.handEl.onclick = (e) => {
         const el = e.target.closest('.pcard'); if (!el) return;
@@ -479,14 +480,18 @@ export class CribbageTable {
     });
   }
   async animateDiscard(id, cards) {
-    if (id === HUMAN) { this.renderHand(this.game); audio.play('deal'); }
-    else { for (let i = 0; i < 2; i++) { const back = this.oppHand.lastChild; if (back) back.remove(); } audio.play('deal'); }
+    // two cards to the crib: two card tosses from Nic's crib clip (crib1 / crib2 — kept distinct from the hold'em fold)
+    if (id === HUMAN) this.renderHand(this.game);
+    else for (let i = 0; i < 2; i++) { const back = this.oppHand.lastChild; if (back) back.remove(); }
+    audio.play('crib1');
+    await this.wait(380);
     this.renderCrib(this.game);
-    await this.wait(250);
+    audio.play('crib2');
+    await this.wait(300);
   }
-  awaitPlay(game) {
+  awaitPlay(game, fresh = true) {
     return new Promise((resolve) => {
-      audio.play('yourturn');
+      if (fresh) audio.play('yourturn');
       this.renderHand(game, { pegging: true });
       this.handEl.onclick = (e) => {
         const el = e.target.closest('.pcard'); if (!el || el.classList.contains('dim')) return;
@@ -529,8 +534,7 @@ export class CribbageTable {
     for (const old of this.felt.querySelectorAll('.cb-points')) old.remove();   // a lingering pegging pop would sit on the panel
     this.felt.append(panel);
     requestAnimationFrame(() => panel.classList.add('show'));
-    audio.play('flip');
-    await this.wait(800);
+    await this.wait(800);   // no sound as the count panel comes up (Nic) — the combinations tick as they land
     let running = 0, credited = 0;
     for (let i = 0; i < n; i++) {
       const it = items[i];
@@ -545,7 +549,7 @@ export class CribbageTable {
       totalEl.textContent = String(running); totalEl.classList.remove('pulse'); void totalEl.offsetWidth; totalEl.classList.add('pulse');
       dots.append(h('i', { class: 'on' }));
       footText.textContent = `${credited} scoring combination${credited === 1 ? '' : 's'} counted`;
-      audio.play('chip');
+      audio.play('count', { volume: 1 });   // Nic's beep, one per combination
       await this.wait(600);
     }
     for (const el of [...els, stEl]) el.classList.remove('hl', 'dim');

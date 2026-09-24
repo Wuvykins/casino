@@ -4,22 +4,41 @@
 import { assets, probeAudio } from './assets.js';
 import { bank } from './bank.js';
 
-export const SFX = ['tap', 'chip', 'chips', 'deal', 'flip', 'check', 'call', 'raise', 'fold', 'win', 'bigwin', 'lose', 'allin', 'tierup', 'tierdown', 'bailout', 'shuffle', 'yourturn', 'dice', 'slotspin', 'slotreels', 'slotwin', 'slotmiss', 'slotclunk', 'slotsmall', 'slotstop', 'slotteacher', 'slotjackpot', 'victory', 'clap'];
+export const SFX = ['tap', 'chip', 'chips', 'deal', 'flip', 'check', 'call', 'raise', 'fold', 'win', 'bigwin', 'lose', 'allin', 'tierup', 'tierdown', 'bailout', 'shuffle', 'yourturn', 'dice', 'slotspin', 'slotreels', 'slotwin', 'slotmiss', 'slotclunk', 'slotsmall', 'slotstop', 'slotteacher', 'slotjackpot', 'victory', 'clap', 'crib1', 'crib2', 'count'];
+
+// effects that reuse another effect's recording when they have no file of their own (Nic, v132)
+const ALIAS = { chips: 'allin', flip: 'deal', tierdown: 'lose' };
 
 let ctx = null;
 const fileSfx = new Map();
+const missingSfx = new Set();   // keys we tried to load a file for and got nothing (synth placeholder from then on)
+let manifestP = null;
+function manifest() {
+  if (!manifestP) manifestP = fetch(assets.fileUrl('manifest.json')).then((r) => r.ok ? r.json() : null).catch(() => null);
+  return manifestP;
+}
 let unlocked = false;
 let voiceNow = null;   // the voice clip currently playing, if any
+let lastSfxAt = -1000; // when the last effect started (see play: one tap per press)
+const TAP_LEVEL = 0.3;  // the button click sits under everything else — it's a UI tick, not an event
 
 
 export const audio = {
   async init() {
-    for (const ext of ['mp3', 'm4a', 'wav']) {
-      await Promise.all(SFX.map(async (k) => {
-        if (fileSfx.has(k)) return;
-        const url = assets.fileUrl(`sfx/${k}.${ext}`);
-        if (await probeAudio(url)) fileSfx.set(k, url);
-      }));
+    // assets/manifest.json (written by tools/build_sw.py) says which files exist. Probing each one with an <audio>
+    // element used to be the only way, and on an iPhone that's still downloading a new build the probes time out and
+    // every effect silently falls back to its synth placeholder ('the sounds are all the old ones' — Nic, twice).
+    const man = await manifest();
+    if (man?.sfx) {
+      for (const f of man.sfx) { const k = f.replace(/\.[^.]+$/, ''); if (!fileSfx.has(k)) fileSfx.set(k, assets.fileUrl(`sfx/${f}`)); }
+    } else {
+      for (const ext of ['mp3', 'm4a', 'wav']) {
+        await Promise.all(SFX.map(async (k) => {
+          if (fileSfx.has(k)) return;
+          const url = assets.fileUrl(`sfx/${k}.${ext}`);
+          if (await probeAudio(url)) fileSfx.set(k, url);
+        }));
+      }
     }
     const unlock = () => { ctxNow(); if (!unlocked) for (const url of fileSfx.values()) bufferFor(url).catch(() => {}); unlocked = true; };   // first tap: decode every effect once
     for (const ev of ['touchstart', 'touchend', 'mousedown', 'keydown']) document.addEventListener(ev, unlock, { once: false, passive: true });
@@ -33,8 +52,18 @@ export const audio = {
 
   play(key, opts = {}) {
     if (!this.enabled) return;
-    const file = fileSfx.get(key);
-    if (file) return playClip(file, (opts.volume ?? 0.8) * this.sfxVolume, { loop: !!opts.loop });
+    // Every <button> press gets a tap from app.js; a button whose own handler already made a sound (a chip, a raise,
+    // a slot stop) or that was tapped a moment ago doesn't get a second click on top of it.
+    const now = performance.now();
+    if (key === 'tap' && now - lastSfxAt < 80) return null;
+    lastSfxAt = now;
+    let file = fileSfx.get(key) || fileSfx.get(ALIAS[key]);
+    if (!file && !missingSfx.has(key) && ctx && unlocked) {   // not found at start-up? try the file once before settling for the placeholder
+      const url = assets.fileUrl(`sfx/${key}.mp3`);
+      bufferFor(url).then(() => fileSfx.set(key, url), () => { missingSfx.add(key); try { synth[key]?.(ctx, opts); } catch { /* ignore */ } });   // no file after all: the placeholder plays now and from then on
+      file = url;
+    }
+    if (file) return playClip(file, (opts.volume ?? (key === 'tap' ? TAP_LEVEL : 0.8)) * this.sfxVolume, { loop: !!opts.loop, rate: opts.rate || 1 });
     if (!ctx || !unlocked) return null;
     try { synth[key]?.(ctx, opts); } catch { /* ignore */ }
     return null;
@@ -51,7 +80,7 @@ export const audio = {
 
 // the synthesised placeholders share one gain so the Sound effects slider covers them as well
 let sfxBus = null;
-function bus() { const c = ctxNow(); if (!sfxBus) { sfxBus = c.createGain(); sfxBus.connect(c.destination); } sfxBus.gain.value = audio.sfxVolume; return sfxBus; }
+function bus(c = ctxNow()) { if (!sfxBus || sfxBus.context !== c) { sfxBus = c.createGain(); sfxBus.connect(c.destination); } sfxBus.gain.value = audio.sfxVolume; return sfxBus; }
 
 // Clips (effects and voice lines) play from decoded AudioBuffers: buffer -> gain -> speakers. That gives real volume
 // control on iPhone (Safari ignores element.volume) without leaking anything: v111–v128 made a fresh <audio> element
@@ -70,7 +99,7 @@ function bufferFor(url) {
   buffers.set(url, p);
   return p;
 }
-function playClip(url, volume, { loop = false } = {}) {
+function playClip(url, volume, { loop = false, rate = 1 } = {}) {
   if (!ctx || !unlocked) {   // no running context yet: a plain element (not wired into the graph, so it's collected when it ends)
     const el = new Audio(url); el.volume = Math.min(1, volume); el.loop = loop; el.play().catch(() => {}); return el;
   }
@@ -86,7 +115,7 @@ function playClip(url, volume, { loop = false } = {}) {
   const finish = () => { handle.ended = true; try { src?.disconnect(); gain.disconnect(); } catch { /* ignore */ } };
   const start = (buf) => {
     if (handle.paused) { finish(); return; }
-    src = c.createBufferSource(); src.buffer = buf; src.loop = handle._loop;
+    src = c.createBufferSource(); src.buffer = buf; src.loop = handle._loop; if (rate !== 1) src.playbackRate.value = rate;
     src.onended = finish;
     src.connect(gain); src.start();
   };
@@ -161,17 +190,22 @@ const roomLevel = () => audio.musicVolume * ROOM_LEVEL;
 export const music = {
   async init() {
     // playlist: assets/music/song-1.mp3, song-2.mp3, ... (stops at the first missing number)
-    for (let n = 1; n <= 60; n++) {
-      let found = null;
-      for (const ext of ['mp3', 'm4a']) { const url = assets.fileUrl(`music/song-${n}.${ext}`); if (await probeAudio(url)) { found = url; break; } }
-      if (!found) break;
-      playlist.push(found);
+    const man = await manifest();
+    if (man?.music) {
+      for (const f of man.music) if (/^song-\d+\./.test(f)) playlist.push(assets.fileUrl(`music/${f}`));
+    } else {
+      for (let n = 1; n <= 60; n++) {
+        let found = null;
+        for (const ext of ['mp3', 'm4a']) { const url = assets.fileUrl(`music/song-${n}.${ext}`); if (await probeAudio(url)) { found = url; break; } }
+        if (!found) break;
+        playlist.push(found);
+      }
     }
     if (playlist.length) musicFiles.set('lobby', playlist[0]);
     // titles for the Setlist editor: assets/music/setlist.json = [{ file: 'song-1.mp3', title, artist }]
     try { const r = await fetch(assets.fileUrl('music/setlist.json'), { cache: 'no-cache' }); if (r.ok) for (const row of await r.json()) titles.set(row.file, row); } catch { /* no manifest: numbered songs */ }
     const roomUrl = assets.fileUrl('music/lobby-room.mp3');
-    if (await probeAudio(roomUrl)) musicFiles.set('room', roomUrl);
+    if (man?.music ? man.music.includes('lobby-room.mp3') : await probeAudio(roomUrl)) musicFiles.set('room', roomUrl);
     // iOS won't start audio until the first tap: retry anything that's meant to be playing on the next gesture
     const retry = () => { ctxNow(); if (track && track.el.paused && audio.musicEnabled && !this.userPaused) track.el.play().catch(() => {}); if (room && room.el.paused && this.roomWanted) room.el.play().catch(() => {}); };
     for (const ev of ['touchend', 'mousedown', 'keydown']) document.addEventListener(ev, retry, { passive: true });
@@ -279,7 +313,7 @@ function tone(ctx, { f = 440, t = 0.1, type = 'sine', vol = 0.2, at = 0, slide =
   g.gain.setValueAtTime(0.0001, ctx.currentTime + at);
   g.gain.exponentialRampToValueAtTime(vol, ctx.currentTime + at + 0.005);
   g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + t);
-  o.connect(g).connect(bus());
+  o.connect(g).connect(bus(ctx));
   o.start(ctx.currentTime + at); o.stop(ctx.currentTime + at + t + 0.02);
 }
 function noise(ctx, { t = 0.08, vol = 0.15, at = 0, hp = 1000 }) {
@@ -290,12 +324,13 @@ function noise(ctx, { t = 0.08, vol = 0.15, at = 0, hp = 1000 }) {
   const s = ctx.createBufferSource(); s.buffer = buf;
   const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp;
   const g = ctx.createGain(); g.gain.value = vol;
-  s.connect(f).connect(g).connect(bus());
+  s.connect(f).connect(g).connect(bus(ctx));
   s.start(ctx.currentTime + at);
 }
 const synth = {
   tap: (c) => tone(c, { f: 900, t: 0.03, type: 'square', vol: 0.05 }),
   chip: (c) => tone(c, { f: 2400, t: 0.05, vol: 0.08 }),
+  count: (c) => tone(c, { f: 1318, t: 0.18, vol: 0.2 }),   // the cribbage count ping (count.mp3 is a brighter rendered version)
   chips: (c) => { for (let i = 0; i < 4; i++) tone(c, { f: 2200 + i * 150, t: 0.05, vol: 0.07, at: i * 0.05 }); },
   deal: (c) => noise(c, { t: 0.07, vol: 0.12, hp: 1500 }),
   flip: (c) => { noise(c, { t: 0.05, vol: 0.1, hp: 2000 }); tone(c, { f: 600, t: 0.05, vol: 0.04, slide: 300 }); },
@@ -308,7 +343,7 @@ const synth = {
   lose: (c) => tone(c, { f: 220, t: 0.35, type: 'sawtooth', vol: 0.05, slide: -120 }),
   allin: (c) => { noise(c, { t: 0.25, vol: 0.2, hp: 1500 }); [330, 392].forEach((f, i) => tone(c, { f, t: 0.2, at: i * 0.12, vol: 0.1, type: 'triangle' })); },
   tierup: (c) => [392, 523, 659, 784, 1047].forEach((f, i) => tone(c, { f, t: 0.35, at: i * 0.12, vol: 0.12, type: 'triangle' })),
-  tierdown: (c) => [523, 440, 349].forEach((f, i) => tone(c, { f, t: 0.35, at: i * 0.18, vol: 0.1, type: 'triangle' })),
+  tierdown: (c) => { [466, 415, 370].forEach((f, i) => tone(c, { f, t: 0.42, at: i * 0.3, vol: 0.1, type: 'triangle' })); tone(c, { f: 311, t: 1.2, at: 0.9, vol: 0.11, type: 'triangle', slide: -40 }); tone(c, { f: 155, t: 1.3, at: 0.9, vol: 0.05, type: 'sine', slide: -20 }); },   // the sad trombone: three steps down and a long droop
   bailout: (c) => [262, 247, 233, 220].forEach((f, i) => tone(c, { f, t: 0.25, at: i * 0.15, vol: 0.1, type: 'square' })),
   shuffle: (c) => { for (let i = 0; i < 8; i++) noise(c, { t: 0.03, vol: 0.06, hp: 2500, at: i * 0.04 }); },
   yourturn: (c) => synth.tap(c),
@@ -322,3 +357,5 @@ const synth = {
   slotclunk: (c) => tone(c, { f: 200, t: 0.2, type: 'triangle', vol: 0.06 }),
   slotjackpot: (c) => [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(c, { f, t: 0.25, at: i * 0.12, vol: 0.14 })),
 };
+// the placeholder recipes, exported so tools/render_synth.mjs can bounce them to files for listening
+export const SYNTH = synth;
