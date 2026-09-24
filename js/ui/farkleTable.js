@@ -82,12 +82,13 @@ export class FarkleTable {
   shout(text, cls) { this.msgEl.textContent = text; this.msgEl.className = 'fk-msg ' + cls; }
   talk(id, trigger, vars = {}, p = 1) {
     const c = this.charOf(id); if (!c) return false;
+    const E0 = this.seatEls[id]; if (E0 && Date.now() - (E0.spokeAt || 0) < 2200) return false;   // still saying the last thing
     if (!this.rng.chance(Math.min(1, p * (c.persona?.chatty ?? 1)))) return false;
     const line = pickLine(c, trigger, { player: this.name, ...vars }, this.rng);
     if (!line) return false;
     audio.voice(c, line.file);
     const E = this.seatEls[id];
-    E.bubble.textContent = line.text; E.bubble.classList.add('show');
+    E.spokeAt = Date.now(); E.bubble.textContent = line.text; E.bubble.classList.add('show');
     clearTimeout(E.bubbleT); E.bubbleT = setTimeout(() => E.bubble.classList.remove('show'), 2600);
     return true;
   }

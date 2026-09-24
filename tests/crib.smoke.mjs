@@ -57,7 +57,7 @@ while (Date.now() - t0 < 420000) {
     if (/Pick/.test(label)) { /* need to select cards first */ }
     else {
       if (/Send/.test(label)) { discards++; await shot('discard'); }
-      if (/Next|Done/.test(label)) { shows++; await shot('show'); if (await page.$('.cb-points.you.show')) await shot('points'); }
+      if (/Next|Done/.test(label)) { shows++; await shot('show'); if (await page.$('.cb-points.you.show')) await shot('points'); if (!seen.has('show-late')) { await page.waitForTimeout(2400); await shot('show-late'); } }
       if (/Deal/.test(label) && games === 0 && discards === 0) await shot('start');
       await bar.click(); await page.waitForTimeout(150); continue;
     }

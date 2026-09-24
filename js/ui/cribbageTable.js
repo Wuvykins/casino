@@ -227,11 +227,12 @@ export class CribbageTable {
 
   say(text) { this.msgEl.textContent = text || ''; }
   talk(trigger, vars = {}, p = 1) {
+    if (Date.now() - (this.spokeAt || 0) < 2200) return false;   // still saying the last thing
     if (!this.rng.chance(Math.min(1, p * (this.char.persona?.chatty ?? 1)))) return false;
     const line = pickLine(this.char, trigger, { player: this.name, ...vars }, this.rng);
     if (!line) return false;
     audio.voice(this.char, line.file);
-    this.bubble.textContent = line.text; this.bubble.classList.add('show');
+    this.spokeAt = Date.now(); this.bubble.textContent = line.text; this.bubble.classList.add('show');
     clearTimeout(this.bubbleT); this.bubbleT = setTimeout(() => this.bubble.classList.remove('show'), 2600);
   }
   updateStacks() { this.youPlate.lastChild.textContent = fmt$(this.stack); this.oppPlate.lastChild.textContent = fmt$(this.oppStack); }
@@ -520,10 +521,11 @@ export class CribbageTable {
     const totalEl = h('div', { class: 'cs-total' }, '0');
     const summary = h('div', { class: 'cs-summary' });
     const right = h('div', { class: 'cs-right' }, cap, label, step, summary, totalEl, h('div', { class: 'cs-pts' }, 'POINTS'));
-    const foot = h('div', { class: 'cs-foot' }, '0 scoring combinations counted');
+    const footText = h('span', { class: 'cs-foot-text' }, '0 scoring combinations counted');
     const breakdownBtn = h('button', { class: 'cs-break' }, 'Show breakdown');
+    const foot = h('div', { class: 'cs-foot' }, footText, breakdownBtn, h('span'));   // text | button in the middle | spacer
     const breakdown = h('div', { class: 'cs-breakdown' });
-    const panel = h('div', { class: 'cb-show cs' }, left, right, foot, breakdownBtn, breakdown);
+    const panel = h('div', { class: 'cb-show cs' }, left, right, foot, breakdown);
     for (const old of this.felt.querySelectorAll('.cb-points')) old.remove();   // a lingering pegging pop would sit on the panel
     this.felt.append(panel);
     requestAnimationFrame(() => panel.classList.add('show'));
@@ -542,7 +544,7 @@ export class CribbageTable {
       running += it.points; credited++;
       totalEl.textContent = String(running); totalEl.classList.remove('pulse'); void totalEl.offsetWidth; totalEl.classList.add('pulse');
       dots.append(h('i', { class: 'on' }));
-      foot.textContent = `${credited} scoring combination${credited === 1 ? '' : 's'} counted`;
+      footText.textContent = `${credited} scoring combination${credited === 1 ? '' : 's'} counted`;
       audio.play('chip');
       await this.wait(600);
     }
@@ -552,7 +554,7 @@ export class CribbageTable {
     cap.textContent = 'HAND TOTAL';
     expr.textContent = n ? 'All combinations counted' : (s.who === 'crib' ? 'Nothing in the crib' : 'Nineteen \u2014 nothing');
     note.textContent = n ? `${n} scoring combination${n === 1 ? '' : 's'}` : 'No points this time';
-    foot.textContent = 'Counting complete';
+    footText.textContent = 'Counting complete';
     const cats = new Map();
     for (const it of items) { const k = it.name === 'Fifteen' ? 'Fifteens' : it.name === 'Pair' ? 'Pairs' : it.name.startsWith('Run') ? 'Runs' : it.name; const c = cats.get(k) || { count: 0, points: 0 }; c.count++; c.points += it.points; cats.set(k, c); }
     for (const [k, v] of cats) summary.append(h('div', { class: 'cs-cat' }, h('span', {}, `${k} \u00d7${v.count}`), h('b', {}, String(v.points))));
@@ -569,7 +571,10 @@ export class CribbageTable {
     await this.wait(600);
     // apply the points on the board now (engine already added them)
     this.updatePegs(game);
-    if (s.total) this.pointsPop(s.playerId, s.total, s.who === 'crib' ? 'Crib' : 'Hand');
+    if (s.total) {
+      this.pointsPop(s.playerId, s.total, s.who === 'crib' ? 'Crib' : 'Hand');
+      if (s.playerId === HUMAN) audio.play(s.total >= 12 ? 'bigwin' : s.total >= 6 ? 'win' : 'chip');   // a big hand or crib gets the big-win fanfare
+    }
     await this.waitButton(s.who === 'crib' ? 'Done' : 'Next', 'call', [panel]);   // tapping the panel moves on too
     panel.classList.remove('show'); setTimeout(() => panel.remove(), 250);
   }

@@ -41,7 +41,8 @@ export function renderTableSelect(root, opts) {
 
 async function chooseBuyIn(root, table, opts) {
   const s = bank.state;
-  const maxOpp = opts.maxOpp ?? 5, minOpp = opts.minOpp ?? 0;
+  const maxOpp = opts.maxOpp ?? 5, minOpp = opts.minOppFor ? opts.minOppFor(table) : (opts.minOpp ?? 0);
+  const fixed = table.minBuy === table.maxBuy;   // tournaments: one entry fee, no slider
   const step = table.bb || table.minBet || table.stake || 1;
   const max = Math.min(table.maxBuy, s.bank);
   const min = table.minBuy;
@@ -69,13 +70,14 @@ async function chooseBuyIn(root, table, opts) {
             refreshGrid();
           } }, portraitEl(c, { size: 'sm' }), h('div', { class: 'ct-name' }, c.name), c.real ? null : h('div', { class: 'ct-tag' }, c.tagline)));
         }
-        countEl.textContent = maxOpp > 1 ? `${opponents.length} of ${maxOpp} seats taken` : '';
+        countEl.textContent = maxOpp > 1 ? `${opponents.length} of ${maxOpp} seats taken` + (opponents.length < minOpp ? ` · pick at least ${minOpp}` : '') : '';
         sitBtn.disabled = opponents.length < minOpp;
       };
       el.append(
         h('div', { class: 'buyin-layout' },
           h('div', { class: 'buyin-row' },
-            h('div', { class: 'muted small' }, 'Buy-in · bank ' + fmt$(s.bank)), amountEl, slider, presets,
+            h('div', { class: 'muted small' }, (fixed ? 'Entry fee' : 'Buy-in') + ' · bank ' + fmt$(s.bank)), amountEl, fixed ? null : slider, fixed ? null : presets,
+            fixed && opts.buyInNote?.(table) ? h('div', { class: 'muted small', style: { margin: '4px 0 8px' } }, opts.buyInNote(table)) : null,
             h('div', { class: 'modal-buttons', style: { justifyContent: 'flex-start' } }, h('button', { class: 'btn ghost', onClick: () => close(null) }, 'Back'), sitBtn),
           ),
           maxOpp === 0 ? h('div', { class: 'muted' }, opts.soloNote || '') : h('div', {},

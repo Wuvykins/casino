@@ -138,7 +138,41 @@ window.addEventListener('resize', checkOrientation);
 checkOrientation();
 
 // Leaving the page mid-session: chips are snapshotted after every hand, and restored to the bank on next load.
-window.addEventListener('pagehide', () => { if (current && !current.stopped) bank.setAtTable({ tableId: current.table.id, stack: current.human.stack, opponents: [] }); });
+const snapshot = () => { if (current && !current.stopped) bank.setAtTable({ tableId: current.table.id, stack: current.tourney ? 0 : current.human.stack, opponents: [] }); };   // tournament chips aren't money
+window.addEventListener('pagehide', snapshot);
+
+// "Exit Game" (Settings): chips are snapshotted, the sound stops, and the window closes where the platform allows
+// it (Android home-screen apps usually do). iPhone/iPad refuse to let a web app close itself, so there the game
+// shows a closed-casino screen: everything is saved and the person swipes home; a tap on "Come back in" reopens.
+const exitGame = () => {
+  snapshot();
+  try { current?.stopClips?.(); } catch { /* ignore */ }
+  try { music.stop(200); } catch { /* ignore */ }
+  const closedScreen = () => {
+    if (document.getElementById('exit-screen')) return;
+    const scr = h('div', { id: 'exit-screen' },
+      h('div', { class: 'exit-card' },
+        h('div', { class: 'exit-eyebrow' }, 'The Casino'),
+        h('h1', {}, 'Closed for the night'),
+        h('p', {}, `Your bank is safe at ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(bank.state.bank + (bank.state.atTable?.stack || 0))}. You can swipe home now.`),
+        h('button', { class: 'btn primary', onClick: () => location.reload() }, 'Come back in')));
+    document.body.append(scr);
+    requestAnimationFrame(() => scr.classList.add('show'));
+  };
+  try { window.close(); } catch { /* ignore */ }
+  setTimeout(() => { if (!document.hidden) closedScreen(); }, 350);   // still here? the platform wouldn't close us
+};
+document.addEventListener('casino:exit', exitGame);
+
+// Phone locked or app put away: after a while away the game goes back to the title on its own rather than
+// resuming a hand from an hour ago (a quick switch to a message and back is left alone).
+const AWAY_LIMIT = 60_000;
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { hiddenAt = Date.now(); snapshot(); }
+  else if (hiddenAt && Date.now() - hiddenAt > AWAY_LIMIT && !document.getElementById('splash') && !document.getElementById('exit-screen')) { snapshot(); location.reload(); }
+  else hiddenAt = 0;
+});
 
 boot();
 

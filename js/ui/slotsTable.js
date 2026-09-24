@@ -27,7 +27,7 @@ const REEL_X = [423, 750, 1081], REEL_W = [274, 277, 274], REEL_Y = 230, REEL_H 
 const REEL_START = 0.85, REEL_STAGGER = 0.08, RESULT_GAP = 0.2;
 const V = 12, ACCEL = 0.35, BRAKE_ROWS = 2.5, BRAKE_T = 2 * BRAKE_ROWS / V;   // rows per second, spin-up time, braking distance/time
 const AUTO_STOP = [2.8, 3.6, 4.4];
-const STOP_GRACE = 1.6, STOP_GRACE_STEP = 0.8;                              // after a manual STOP the remaining reels wait at least this long (next one, then +step each)                                          // when each reel brakes on its own (about; it waits for the target to come round)
+const STOP_GRACE = 1.6, STOP_GRACE_STEP = 0.8;
 
 export class SlotsTable {
   constructor(root, table, buyIn, { onLeave }) {
@@ -90,13 +90,16 @@ export class SlotsTable {
     // the machine's own pick: where each reel lands if the player never touches STOP (with the odd bit of luck)
     let auto = this.machine.spin(this.bet);
     if (auto.kind === 'miss' && this.rng.chance(LUCK.slotSave)) auto = this.machine.spinSmallWin(this.bet);
+    // the house is generous: one spin in twenty is a jackpot whatever the reels rolled (a hand stop lands on it too)
+    let rigged = false;
+    if (auto.kind !== 'jackpot' && this.rng.chance(LUCK.slotJackpot)) { const stops = STRIPS.map((st) => st.indexOf(0)); auto = { stops, bet: this.bet, ...evaluateStops(stops, this.bet) }; rigged = true; }
     const from = this.pos.slice();
     const reels = from.map((f, i) => {
       const r = { from: f, startAt: REEL_START + i * REEL_STAGGER, target: auto.stops[i], brake: null, stop: null, manual: false };
       this.planAuto(r, AUTO_STOP[i] - 1);
       return r;
     });
-    this.spin = { t0: performance.now() / 1000, reels, result: null, settled: false, landed: false, settling: false };
+    this.spin = { t0: performance.now() / 1000, reels, result: null, settled: false, landed: false, settling: false, rigged };
     this.spin.endAt = Math.max(...reels.map((r) => r.end)); this.spin.resultAt = this.spin.endAt + RESULT_GAP;
     this.shownWin = 0; this.title = 'GOOD LUCK';
     // sounds: the drum roll plus the reel whir, both cut when the last reel lands (see draw())
@@ -146,7 +149,8 @@ export class SlotsTable {
     if (i < 0) return;                                                 // nothing rolling yet
     audio.play('slotstop', { volume: 0.9 });
     s.reels[i].manual = true;
-    this.brake(i, t, BRAKE_ROWS);
+    if (s.rigged) { this.planAuto(s.reels[i], t); }                    // a gifted jackpot: the hand stop brakes at the next pass of the logo, so it still lands
+    else this.brake(i, t, BRAKE_ROWS);
     // the player is stopping them by hand: give the reels still rolling more time before they stop on their own
     let n = 0;
     for (const r of s.reels) if (!r.brake) { this.planAuto(r, Math.max(r.autoAt, t + STOP_GRACE + n * STOP_GRACE_STEP)); n++; }
@@ -168,7 +172,7 @@ export class SlotsTable {
     if (r.kind === 'jackpot') {
       music.duck(true);
       this.jackClip = audio.play('slotjackpot', { volume: 0.9 });
-      await wait(3200);                                          // let the synth riff land first
+      await wait(6900);                                          // the synth intro runs ~7 s; the banner lands with "Ah, might as well jump"
       await resultBanner(this.el, { type: 'win', amount: r.payout, caption: '★   JACKPOT   ★', title: 'Might as well jump!', hold: 3600 });
     } else if (r.payout >= r.bet) {
       this.winClip = audio.play('slotteacher', { volume: 0.85 });     // "got it bad… I'm hot for teacher"
@@ -274,7 +278,7 @@ export class SlotsTable {
       body: (el) => {
         el.append(h('p', { class: 'muted small' }, 'One payline, three reels. Pays are multiples of your bet.'));
         el.append(h('div', { class: 'paytable' }, PAYTABLE.map((row) => h('div', { class: 'pt-row' + (row.jackpot ? ' jack' : '') }, h('span', {}, row.name + (row.jackpot ? ' — JACKPOT' : '')), h('b', {}, (row.mult >= 1 ? row.mult + '×' : Math.round(row.mult * 100) + '% back'))))));
-        el.append(h('p', { class: 'muted small' }, `At ${fmt$(this.bet)} a spin the jackpot pays ${fmt$(this.bet * 200)}.`));
+        el.append(h('p', { class: 'muted small' }, `At ${fmt$(this.bet)} a spin the jackpot pays ${fmt$(this.bet * 25)}.`));
       },
       buttons: [{ label: 'Rock on', kind: 'primary' }],
     });

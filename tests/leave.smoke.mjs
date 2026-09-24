@@ -16,9 +16,9 @@ for (const [game, ready] of [["Texas Hold'em", '.actionbar:not(.hidden) button.a
   await page.click(`button.hotspot[title="${game}"]`); await page.waitForSelector('.select-screen');
   await page.click('.table-tile:not(.locked)'); await page.waitForSelector('.cast-grid'); await page.click('.modal button:has-text("Sit down")');
   await page.waitForSelector('.table-screen');
-  if (game === 'Blackjack') { await page.waitForSelector('.actionbar.betting:not(.hidden)'); await page.click('.rack-chip'); await page.$eval('button.act.raise', (b) => b.click()); await page.waitForSelector('.actionbar:not(.hidden):not(.betting) button.act', { timeout: 20000 }); }
+  if (game === 'Blackjack') { await page.waitForSelector('.actionbar.betting:not(.hidden)'); await page.click('.rack-chip'); await page.$eval('button.act.raise', (b) => b.click()); await page.waitForSelector('.actionbar:not(.hidden):not(.betting) button.act, .bj-msg:has-text("Place your bet")', { timeout: 20000 }); }
   else if (game === 'Farkle') { await page.waitForSelector('.actionbar:not(.hidden) button.act:has-text("Roll")', { timeout: 30000 }); await page.click('.actionbar:not(.hidden) button.act:has-text("Roll")'); await page.waitForTimeout(1500); }
-  else if (game === 'Cribbage') { await page.waitForSelector('.actionbar:not(.hidden) button.act:has-text("Deal")', { timeout: 20000 }); await page.click('.actionbar:not(.hidden) button.act:has-text("Deal")'); await page.waitForSelector(ready, { timeout: 20000 }); }
+  else if (game === 'Cribbage') { await page.waitForSelector('.cb-deal-mid.show', { timeout: 20000 }); await page.click('.cb-deal-mid.show'); await page.waitForSelector(ready, { timeout: 20000 }); }   // the Deal sits mid-felt on the painted table
   else await page.waitForSelector(ready, { timeout: 30000 });
   await page.click('text=Leave table');
   await page.waitForSelector('.modal button:has-text("Leave now")', { timeout: 5000 });

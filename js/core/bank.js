@@ -64,7 +64,7 @@ export const bank = {
   // Leaving (or reload recovery): chips return to the bank and the card is re-evaluated, up or down.
   cashOut(amount, tableId) {
     this.state.bank += amount;
-    this.log('cashout', amount, tableId);
+    if (amount) this.log('cashout', amount, tableId);   // a tournament bust cashes out nothing: no statement line
     const change = this.reevaluateTier();
     this.state.atTable = null;
     this.save();

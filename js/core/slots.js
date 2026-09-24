@@ -1,5 +1,6 @@
-// Slots: three reels, one payline, six symbols. A family machine, not a casino one: it pays back around 93 cents
-// on the dollar over the long run (see tests/slots.test.mjs), with small wins often enough to stay fun.
+// Slots: three reels, one payline, six symbols. A family machine, not a casino one. The reels alone pay back about
+// 78 cents on the dollar (tests/slots.test.mjs), but the game tilts it generous: LUCK.slotJackpot makes one spin in
+// twenty a jackpot (Nic: 'it's a game, not real life'), which lifts the payback to roughly 200%.
 //
 //   const m = new Machine({ rng });
 //   const r = m.spin(bet);         // -> { stops: [i,i,i], symbols: [s,s,s], payout, kind: 'miss'|'win'|'jackpot', name }
@@ -8,7 +9,8 @@
 export const SYMBOLS = ['vh', 'record', 'amp', 'seven', 'bolt', 'guitar'];
 export const SYMBOL_NAMES = { vh: 'Van Halen', record: 'Record', amp: 'Amp', seven: 'Seven', bolt: 'Bolt', guitar: 'Guitar' };
 
-// One reel strip per reel: 24 stops each; two VH logos per reel (jackpot about one spin in 1,700).
+// One reel strip per reel: 24 stops each; two VH logos per reel (a natural three-logo line is about one spin in 1,700 —
+// the game adds its own jackpots on top, see LUCK.slotJackpot).
 export const STRIPS = [
   [4, 1, 4, 2, 5, 1, 4, 3, 1, 4, 0, 2, 4, 1, 5, 2, 4, 3, 1, 4, 2, 0, 4, 3],
   [4, 2, 1, 4, 3, 1, 5, 4, 2, 1, 4, 0, 2, 4, 1, 3, 4, 5, 1, 2, 4, 3, 1, 0],
@@ -18,7 +20,7 @@ export const STOPS = STRIPS[0].length;
 
 // Payout as a multiple of the bet.
 export const PAYTABLE = [
-  { name: 'Three Van Halen', test: (s) => s.every((x) => x === 0), mult: 200, jackpot: true },
+  { name: 'Three Van Halen', test: (s) => s.every((x) => x === 0), mult: 25, jackpot: true },   // 25×: with a jackpot every ~20 spins, 200× would print money
   { name: 'Three guitars', test: (s) => s.every((x) => x === 5), mult: 50 },
   { name: 'Three sevens', test: (s) => s.every((x) => x === 3), mult: 25 },
   { name: 'Three amps', test: (s) => s.every((x) => x === 2), mult: 15 },

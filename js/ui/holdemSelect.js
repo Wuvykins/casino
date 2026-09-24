@@ -8,10 +8,13 @@ export function renderHoldemSelect(root, { onBack, onSit }) {
     title: "Texas Hold'em",
     groups: [
       { label: 'No-Limit', tables: HOLDEM_TABLES.filter((t) => t.mode === 'nolimit') },
-      { label: 'Fixed Limit', tables: HOLDEM_TABLES.filter((t) => t.mode === 'limit') },
+      { label: 'Tournaments', tables: HOLDEM_TABLES.filter((t) => t.mode === 'tourney') },
     ],
-    describe: (t) => `Blinds ${fmt$(t.sb)}/${fmt$(t.bb)} · Buy-in ${fmt$(t.minBuy)}–${fmt$(t.maxBuy)}`,
-    minOpp: 1, maxOpp: MAX_SEATS - 1,
+    describe: (t) => t.mode === 'tourney'
+      ? `Buy-in ${fmt$(t.buyIn)} · 1st ${fmt$(t.prizes[0])} · 2nd ${fmt$(t.prizes[1])} · bust and you're out`
+      : `Blinds ${fmt$(t.sb)}/${fmt$(t.bb)} · Buy-in ${fmt$(t.minBuy)}–${fmt$(t.maxBuy)}`,
+    minOpp: 1, minOppFor: (t) => (t.mode === 'tourney' ? 2 : 1), maxOpp: MAX_SEATS - 1,
+    buyInNote: (t) => (t.mode === 'tourney' ? `Everyone starts with ${t.chips.toLocaleString('en-US')} chips. Blinds go up every few hands. Two prizes: ${fmt$(t.prizes[0])} and ${fmt$(t.prizes[1])}.` : null),
     onBack, onSit,
   });
 }

@@ -2,8 +2,7 @@
 
 A private, Hoyle-Casino-style casino for the phone. Vanilla HTML/JS, no build step, one save on the device.
 
-**Live now:** lobby, bank and five credit-card tiers, Ken's bailout, Texas Hold'em (limit and no-limit) with personality-driven opponents, Blackjack (6 decks, dealer stands on 17, 3:2, double any two, double after split, split to 4 hands, insurance) with up to two of the family playing beside you, two-handed Cribbage (first to 121, a stake per game, skunks pay double and triple), and Farkle (first to 10,000, up to three opponents).
-**Coming:** Slots.
+**Live now:** lobby, bank and five credit-card tiers, Ken's bailout, Texas Hold'em (no-limit cash tables and Sit & Go tournaments — everyone starts with 1,500 chips, blinds climb, bust and you're out, first and second are paid) with personality-driven opponents, Blackjack (6 decks, dealer stands on 17, 3:2, double any two, double after split, split to 4 hands, insurance) with up to two of the family playing beside you, two-handed Cribbage (first to 121, a stake per game, skunks pay double and triple), Farkle (first to 10,000, up to three opponents), and the Van Halen slot machine (skill-stop reels, Hot for Teacher on the pull, Jump on a jackpot — and the house is generous: about one spin in twenty hits).
 
 ## Put it on your phone (the real thing)
 
@@ -118,6 +117,10 @@ Ken has `bailout` and `bailoutAgain`, in `assets/voice/ken/`.
 ## Sound effects
 
 Synthesised placeholders play until you drop files in `assets/sfx/<name>.mp3` (or .m4a/.wav): `tap chip chips deal flip check call raise fold win bigwin lose allin tierup tierdown bailout shuffle yourturn dice`. Nic's recordings so far: deal, check, call (ante up), raise, allin, lose, dice.
+
+## Leaving and coming back
+
+Settings has **Exit Game**: chips go back to the bank and the app closes (on iPhone and iPad, which don't let a web app close itself, it shows a "Closed for the night" card instead — swipe home from there). The same happens by itself if the phone is locked or the app is put away for more than a minute, so nobody comes back to a hand from yesterday. Everything is saved continuously — there is no separate save step.
 
 ## Music and the Setlist
 

@@ -11,18 +11,23 @@ import { assets } from '../core/assets.js';
 import { audio } from '../core/audio.js';
 import { CHARACTERS, characterById } from '../content/characters.js';
 import { pickLine } from '../content/lines.js';
-import { MAX_SEATS } from '../content/tables.js';
+import { MAX_SEATS, TOURNEY_BLINDS, TOURNEY_LEVEL_HANDS } from '../content/tables.js';
 import { showSettings, noteButton, icon } from './lobby.js';
+import { championship } from './championship.js';
+
+// tournament chips are counted, not dollars
+export const fmtChips = (n) => Math.round(n).toLocaleString('en-US');
 
 // "TOTAL POT" plaque (Nic's design): dark green plate with a gold rim; the amount counts up over 320 ms with an
 // ease-out and the rim flashes gold when the pot grows. Hidden while the pot is empty.
 class PotPlaque {
-  constructor() {
-    this.amtEl = h('div', { class: 'pp-amt' }, '$0');
+  constructor(fmt = fmt$) {
+    this.fmt = fmt;
+    this.amtEl = h('div', { class: 'pp-amt' }, fmt(0));
     this.el = h('div', { class: 'pot-plaque' }, h('div', { class: 'pp-label' }, 'TOTAL POT'), this.amtEl);
     this.shown = 0; this.target = 0; this.raf = 0;
   }
-  reset() { this.shown = 0; this.target = 0; cancelAnimationFrame(this.raf); this.el.classList.remove('show', 'pulse'); this.amtEl.textContent = '$0'; }
+  reset() { this.shown = 0; this.target = 0; cancelAnimationFrame(this.raf); this.el.classList.remove('show', 'pulse'); this.amtEl.textContent = this.fmt(0); }
   hide() { this.el.classList.remove('show'); }
   set(next) {
     next = Math.max(0, Math.round(next));
@@ -31,12 +36,12 @@ class PotPlaque {
     this.target = next;
     if (next > 0) this.el.classList.add('show');
     cancelAnimationFrame(this.raf);
-    if (!up) { this.shown = next; this.amtEl.textContent = fmt$(next); return; }
+    if (!up) { this.shown = next; this.amtEl.textContent = this.fmt(next); return; }
     const t0 = performance.now();
     const step = (now) => {
       const t = Math.min(1, (now - t0) / 320), e = 1 - Math.pow(1 - t, 3);
       this.shown = Math.round(from + (next - from) * e);
-      this.amtEl.textContent = fmt$(this.shown);
+      this.amtEl.textContent = this.fmt(this.shown);
       if (t < 1) this.raf = requestAnimationFrame(step);
     };
     this.raf = requestAnimationFrame(step);
@@ -55,6 +60,7 @@ const SEAT_POS = [
 const CENTER = { x: 50, y: 47 };
 const OPP_SEATS = { 1: [3], 2: [2, 4], 3: [2, 3, 4], 4: [1, 2, 4, 5], 5: [1, 2, 3, 4, 5] };
 const HUMAN = 'you';
+const TEST_CHAMPION = false;   // true = win one tournament hand and the ceremony fires (for testing the champion sequence)
 
 export class HoldemTable {
   constructor(root, table, buyIn, opponentIds, { onLeave }) {
@@ -68,14 +74,20 @@ export class HoldemTable {
     this.pendingHuman = null;
     this.reads = {};
     this.humanStats = { hands: 0, vpip: 0, aggr: 0, passive: 0 };
+    // Sit & Go: everyone gets the same stack of tournament chips, the entry fee is spent, blinds rise, busting = out
+    this.tourney = table.mode === 'tourney';
+    this.fmt = this.tourney ? fmtChips : fmt$;
+    this.level = 0; this.levelBoost = 0; this.payout = 0; this.placed = 0;   // levelBoost: one extra blind level per player knocked out
+    this.game = this.tourney ? { ...table, mode: 'nolimit', sb: TOURNEY_BLINDS[0][0], bb: TOURNEY_BLINDS[0][1] } : table;   // what the engine and AI play by
+    const startStack = this.tourney ? table.chips : buyIn;
     const seats = OPP_SEATS[Math.min(5, opponentIds.length)];
-    this.seats = [{ seat: 0, id: HUMAN, name: bank.state.playerName || 'You', isHuman: true, stack: buyIn, char: null, mood: null, out: false }];
+    this.seats = [{ seat: 0, id: HUMAN, name: bank.state.playerName || 'You', isHuman: true, stack: startStack, char: null, mood: null, out: false }];
     opponentIds.slice(0, 5).forEach((id, i) => {
       const c = characterById(id);
-      this.seats.push({ seat: seats[i], id, name: c.name, isHuman: false, stack: table.maxBuy, char: c, mood: { tilt: 0 }, out: false });
+      this.seats.push({ seat: seats[i], id, name: c.name, isHuman: false, stack: this.tourney ? table.chips : table.maxBuy, char: c, mood: { tilt: 0 }, out: false });
     });
-    bank.buyIn(buyIn, table.id);
-    bank.setAtTable({ tableId: table.id, stack: buyIn, opponents: opponentIds });
+    bank.buyIn(this.tourney ? table.buyIn : buyIn, table.id);
+    bank.setAtTable({ tableId: table.id, stack: this.tourney ? 0 : buyIn, opponents: opponentIds });   // tournament chips aren't money: nothing to restore on a reload
     this.refreshReads();
     this.build();
   }
@@ -98,14 +110,14 @@ export class HoldemTable {
     this.el = h('div', { class: 'table-screen holdem' });
     this.topbar = h('div', { class: 'topbar table-top' },
       h('button', { class: 'btn ghost small leave-btn', onClick: () => this.requestLeave() }, '‹ Leave table'),
-      h('div', { class: 'tt-title' }, this.table.name),
+      h('div', { class: 'tt-title' }, this.tourney ? `${this.table.name} · Blinds ${fmtChips(this.game.sb)}/${fmtChips(this.game.bb)}` : this.table.name),
       h('div', { class: 'topbar-bank' }, 'Bank ', h('b', { class: 'bank-amt' }, fmt$(bank.state.bank))),
     );
     this.felt = h('div', { class: 'felt' });
     assets.bg(this.felt, 'table.felt.holdem');
     this.boardEl = h('div', { class: 'board' });
     this.potEl = h('div', { class: 'pot' });
-    this.plaque = new PotPlaque();   // Nic's "TOTAL POT" plaque, above the community cards
+    this.plaque = new PotPlaque(this.fmt);   // Nic's "TOTAL POT" plaque, above the community cards
     this.msgEl = h('div', { class: 'table-msg' });
     // tall screens (iPad, desktop): the plaque floats above the community cards. Phones have no room up there
     // (the top seat sits right over the board), so it goes in the middle of the row under the cards instead.
@@ -119,7 +131,7 @@ export class HoldemTable {
       const seatEl = h('div', { class: 'seat' + (s.isHuman ? ' human' : '') + (pos.x > 50 ? ' right' : ''), style: { left: pos.x + '%', top: pos.y + '%' }, dataset: { pos: pos.y < 30 ? 'top' : 'bottom' } });
       const portrait = s.isHuman ? playerAvatarEl(s.name) : portraitEl(s.char, { size: 'md' });
       const cards = h('div', { class: 'holecards' });
-      const plate = h('div', { class: 'nameplate' }, h('div', { class: 'pname' }, s.name), h('div', { class: 'pstack' }, fmt$(s.stack)));
+      const plate = h('div', { class: 'nameplate' }, h('div', { class: 'pname' }, s.name), h('div', { class: 'pstack' }, this.fmt(s.stack)));
       const tag = h('div', { class: 'action-tag' });
       const bubble = h('div', { class: 'bubble' });
       const dealer = h('div', { class: 'dealer-btn' }, 'D');
@@ -147,7 +159,7 @@ export class HoldemTable {
   // ---------- main loop ----------
   async run() {
     audio.play('shuffle');
-    this.say(null, `Welcome to ${this.table.name}. Blinds ${fmt$(this.table.sb)}/${fmt$(this.table.bb)}.`);
+    this.say(null, this.tourney ? `Welcome to the ${this.table.name}. ${fmtChips(this.table.chips)} chips each, blinds ${fmtChips(this.game.sb)}/${fmtChips(this.game.bb)} — last two standing get paid.` : `Welcome to ${this.table.name}. Blinds ${fmt$(this.table.sb)}/${fmt$(this.table.bb)}.`);
     await this.wait(600);
     for (const s of this.seats.slice(1)) if (this.talk(s, 'greet', {}, 0.5)) await this.wait(500);
     await this.wait(600);
@@ -160,9 +172,15 @@ export class HoldemTable {
   }
 
   async playHand() {
-    // seat maintenance: busted opponents rebuy or get replaced
+    if (this.tourney) {
+      // blinds climb every few hands
+      for (const s of this.seats.slice(1)) if (s.stack <= 0 && !s.out) { s.out = true; this.levelBoost++; this.updateSeat(s); }
+      const lvl = Math.min(TOURNEY_BLINDS.length - 1, Math.floor(this.handNo / TOURNEY_LEVEL_HANDS) + this.levelBoost);
+      if (lvl !== this.level) { this.level = lvl; [this.game.sb, this.game.bb] = TOURNEY_BLINDS[lvl]; this.topbar.querySelector('.tt-title').textContent = `${this.table.name} · Blinds ${fmtChips(this.game.sb)}/${fmtChips(this.game.bb)}`; this.say(null, `Blinds up: ${fmtChips(this.game.sb)}/${fmtChips(this.game.bb)}.`); toast(`Blinds up: ${fmtChips(this.game.sb)}/${fmtChips(this.game.bb)}`); audio.play('yourturn'); await this.wait(900); }
+    }
+    // cash game seat maintenance: busted opponents rebuy or get replaced
     for (const s of this.seats.slice(1)) {
-      if (s.stack <= 0) {
+      if (s.stack <= 0 && !this.tourney) {
         if (this.rng.chance(0.25)) {
           const pool = CHARACTERS.filter((c) => !this.seats.some((x) => x.id === c.id));
           if (pool.length) {
@@ -184,7 +202,7 @@ export class HoldemTable {
     // move the button to the next occupied seat
     this.button = (this.button + 1) % players.length;
     this.handNo++;
-    const hand = new Hand({ table: this.table, players, button: this.button, rng: this.rng, deck: this.luckyDeck(players) });
+    const hand = new Hand({ table: this.game, players, button: this.button, rng: this.rng, deck: this.luckyDeck(players) });
     this.hand = hand; this.cursor = 0; this.resolveNext = null;
     this.resetHandUI();
     hand.start();
@@ -222,7 +240,9 @@ export class HoldemTable {
     if (!players.some((p) => p.id === HUMAN) || players.length < 2) return null;
     const n = players.length;
     const order = players.map((_, k) => players[(this.button + 1 + k) % n].id);
-    const r = this.rng.next();
+    const scale = this.tourney ? (this.table.luck ?? 1) : 1;   // tournaments get less help the higher the table
+    if (scale <= 0) return null;
+    const r = this.rng.next() / scale;
     if (r < LUCK.holdemFamily) return luckyHoldemDeck(order, HUMAN, 'family', this.rng);
     if (r < LUCK.holdemFamily + LUCK.holdemValue) return luckyHoldemDeck(order, HUMAN, 'value', this.rng);
     if (r < LUCK.holdemFamily + LUCK.holdemValue + LUCK.goodHoleCards) return betterHoleCards(order, HUMAN, this.rng);
@@ -312,7 +332,7 @@ export class HoldemTable {
           for (const id of winners) {
             const E = this.seatEls[id]; E.seatEl.classList.add('winner');
             const amt = ev.awards.filter((a) => a.playerId === id).reduce((s, a) => s + a.amount, 0);
-            const pop = h('div', { class: 'winpop' }, '+' + fmt$(amt));
+            const pop = h('div', { class: 'winpop' }, '+' + this.fmt(amt));
             E.seatEl.append(pop); setTimeout(() => pop.remove(), 2200);
           }
           if (ev.showdown) {
@@ -325,10 +345,10 @@ export class HoldemTable {
           // what you actually gained: the pot you were awarded minus the chips you put in yourself
           const humanAward = ev.awards.filter((a) => a.playerId === HUMAN).reduce((s, a) => s + a.amount, 0);
           const humanGain = humanAward - (this.hand.players.find((p) => p.id === HUMAN)?.committed || 0);
-          const bigWin = humanGain >= this.table.bb * 25;
+          const bigWin = humanGain >= this.game.bb * 25;
           audio.play(humanWon ? (bigWin ? 'bigwin' : 'win') : 'chips');
           const names = winners.map((id) => this.seatById(id).name).join(' & ');
-          this.say(null, ev.showdown ? `${names} win${winners.length > 1 ? '' : 's'} ${fmt$(totalPot)} with ${ev.awards[0].hand}` : `${names} take${winners.length > 1 ? '' : 's'} ${fmt$(totalPot)}`);
+          this.say(null, ev.showdown ? `${names} win${winners.length > 1 ? '' : 's'} ${this.fmt(totalPot)} with ${ev.awards[0].hand}` : `${names} take${winners.length > 1 ? '' : 's'} ${this.fmt(totalPot)}`);
           // chips slide from the pot to each winner
           await this.wait(350);
           for (const id of winners) {
@@ -387,7 +407,7 @@ export class HoldemTable {
       const banner = h('div', { class: 'win-banner' + (big ? ' big' : '') },
         h('div', { class: 'wb-title' }, big ? 'BIG WIN!' : 'You win!'),
         chipStackEl(amount, { maxChips: big ? 24 : 14, label: false }),
-        h('div', { class: 'wb-amount' }, '+' + fmt$(amount)),
+        h('div', { class: 'wb-amount' }, '+' + this.fmt(amount)),
         handName ? h('div', { class: 'wb-hand' }, handName) : null,
       );
       if (big) for (let i = 0; i < 18; i++) banner.append(h('i', { class: 'spark', style: { '--x': (Math.random() * 100).toFixed(0) + '%', '--d': (Math.random() * .8).toFixed(2) + 's', '--c': ['#e6c36a', '#fff', '#8fe0a2', '#f0a0a0'][i % 4] } }));
@@ -424,7 +444,7 @@ export class HoldemTable {
   afterAction(seat, action, legal) {
     const p = this.hand.players.find((x) => x.id === seat.id);
     const ev = this.hand.events.filter((e) => e.type === 'action').pop();
-    const label = ev.action === 'fold' ? 'Fold' : ev.action === 'check' ? 'Check' : ev.action === 'call' ? `Call ${fmt$(ev.amount)}` : ev.action === 'bet' ? `Bet ${fmt$(ev.to)}` : `Raise to ${fmt$(ev.to)}`;
+    const label = ev.action === 'fold' ? 'Fold' : ev.action === 'check' ? 'Check' : ev.action === 'call' ? `Call ${this.fmt(ev.amount)}` : ev.action === 'bet' ? `Bet ${this.fmt(ev.to)}` : `Raise to ${this.fmt(ev.to)}`;
     this.setTag(seat.id, p.allIn && ev.action !== 'fold' ? 'ALL IN' : label, ev.action);
     const E = this.seatEls[seat.id];
     if (ev.action === 'fold') {
@@ -433,7 +453,7 @@ export class HoldemTable {
     }
     else if (ev.action === 'check') audio.play('check');
     else if (p.allIn) { audio.play('allin'); E.seatEl.classList.add('allin'); }
-    else if (ev.action === 'call' && this.hand.street === 'preflop' && this.hand.currentBet <= this.table.bb) audio.play('call'); // just calling the blind
+    else if (ev.action === 'call' && this.hand.street === 'preflop' && this.hand.currentBet <= this.game.bb) audio.play('call'); // just calling the blind
     else audio.play('raise'); // bet, raise, or calling a raise
     this.renderMoney();
     if (!seat.isHuman) {
@@ -447,7 +467,7 @@ export class HoldemTable {
     const hand = this.hand;
     for (const p of hand.players) {
       const E = this.seatEls[p.id]; if (!E) continue;
-      E.stackEl.textContent = fmt$(p.stack);
+      E.stackEl.textContent = this.fmt(p.stack);
       if (E.betEl.querySelector('.shown')) continue; // revealed cards live here at showdown
       clear(E.betEl);
       if (p.bet > 0 && !final) E.betEl.append(chipStackEl(p.bet, { compact: true, maxChips: 8 }));
@@ -457,7 +477,7 @@ export class HoldemTable {
     if (collected > 0) this.potEl.append(chipStackEl(collected, { maxChips: 8, compact: true, label: false }));
     this.plaque.set(hand.pot);   // blinds + every bet count toward the total
   }
-  updateSeat(s) { const E = this.seatEls[s.id]; if (E) { E.stackEl.textContent = fmt$(s.stack); E.seatEl.classList.toggle('sitting-out', s.stack <= 0); } }
+  updateSeat(s) { const E = this.seatEls[s.id]; if (E) { E.stackEl.textContent = s.out ? 'OUT' : this.fmt(s.stack); E.seatEl.classList.toggle('sitting-out', s.stack <= 0); E.seatEl.classList.toggle('out', !!s.out); } }
   setTag(id, text, kind = '') { const E = this.seatEls[id]; if (!E) return; E.tag.textContent = text; E.tag.className = 'action-tag show ' + kind; }
   highlightActor(id) { for (const [k, E] of Object.entries(this.seatEls)) E.seatEl.classList.toggle('acting', k === id); }
   say(seat, text) { this.msgEl.textContent = text; }
@@ -466,12 +486,13 @@ export class HoldemTable {
   // The text bubble always shows, and the recording plays too when the line has one.
   talk(seat, trigger, vars = {}, p = 1) {
     if (!seat?.char) return false;
+    const E0 = this.seatEls[seat.id]; if (E0 && Date.now() - (E0.spokeAt || 0) < 2200) return false;   // still saying the last thing
     if (!this.rng.chance(Math.min(1, p * (seat.char.persona?.chatty ?? 1)))) return false;
     const line = pickLine(seat.char, trigger, { player: this.human.name, ...vars }, this.rng);
     if (!line) return false;
     audio.voice(seat.char, line.file);          // the recording, if this line has one
     const E = this.seatEls[seat.id]; if (!E) return false;
-    E.bubble.textContent = line.text || '…'; E.bubble.classList.add('show');
+    E.spokeAt = Date.now(); E.bubble.textContent = line.text || '…'; E.bubble.classList.add('show');
     clearTimeout(E.bubbleT); E.bubbleT = setTimeout(() => E.bubble.classList.remove('show'), 2600);
     return true;
   }
@@ -501,14 +522,14 @@ export class HoldemTable {
       const btn = (label, cls, fn) => h('button', { class: 'act ' + cls, onClick: () => { audio.play('tap'); fn(); } }, label);
       bar.append(btn('Fold', 'fold', () => done({ type: 'fold' })));
       if (legal.canCheck) bar.append(btn('Check', 'check', () => done({ type: 'check' })));
-      else bar.append(btn(['Call ', h('span', { class: 'amt' }, fmt$(legal.callAmount))], 'call', () => done({ type: 'call' })));
+      else bar.append(btn(['Call ', h('span', { class: 'amt' }, this.fmt(legal.callAmount))], 'call', () => done({ type: 'call' })));
       if (legal.canRaise) {
         const verb = legal.isBet ? 'Bet' : 'Raise';
-        if (legal.fixed) bar.append(btn(`${verb} ${fmt$(legal.minRaiseTo)}`, 'raise', () => done({ type: 'raise', amount: legal.minRaiseTo })));
+        if (legal.fixed) bar.append(btn(`${verb} ${this.fmt(legal.minRaiseTo)}`, 'raise', () => done({ type: 'raise', amount: legal.minRaiseTo })));
         else bar.append(btn(verb + '…', 'raise', () => this.raisePanel(legal, p, done)));
       } else if (legal.canCall && legal.callAmount >= p.stack) {
         // the call is all-in; make that obvious
-        const c = bar.querySelector('.call'); clear(c); c.append('All in ', h('span', { class: 'amt' }, fmt$(legal.callAmount)));
+        const c = bar.querySelector('.call'); clear(c); c.append('All in ', h('span', { class: 'amt' }, this.fmt(legal.callAmount)));
       }
       // opponents get impatient
       this.hurryT = setTimeout(() => { const s = this.rng.pick(this.seats.slice(1).filter((x) => x.stack > 0)); if (s) this.talk(s, 'hurry'); }, 14000);
@@ -517,7 +538,7 @@ export class HoldemTable {
 
   raisePanel(legal, p, done) {
     const hand = this.hand;
-    const step = this.table.bb >= 10 ? this.table.sb : 1;
+    const step = this.game.bb >= 10 ? this.game.sb : 1;
     let to = legal.minRaiseTo;
     const potAfterCall = hand.pot + legal.callAmount;
     const preset = (frac) => Math.min(legal.maxRaiseTo, Math.max(legal.minRaiseTo, Math.round((p.bet + legal.callAmount + potAfterCall * frac) / step) * step));
@@ -525,7 +546,7 @@ export class HoldemTable {
     const amt = h('div', { class: 'raise-amt' });
     const slider = h('input', { type: 'range', min: legal.minRaiseTo, max: legal.maxRaiseTo, step, value: to });
     const confirm = h('button', { class: 'act raise' }, '');
-    const set = (v) => { to = Math.min(legal.maxRaiseTo, Math.max(legal.minRaiseTo, Math.round(v / step) * step)); slider.value = to; amt.textContent = fmt$(to); confirm.textContent = to >= legal.maxRaiseTo ? `All in ${fmt$(to)}` : `${legal.isBet ? 'Bet' : 'Raise to'} ${fmt$(to)}`; };
+    const set = (v) => { to = Math.min(legal.maxRaiseTo, Math.max(legal.minRaiseTo, Math.round(v / step) * step)); slider.value = to; amt.textContent = this.fmt(to); confirm.textContent = to >= legal.maxRaiseTo ? `All in ${this.fmt(to)}` : `${legal.isBet ? 'Bet' : 'Raise to'} ${this.fmt(to)}`; };
     slider.addEventListener('input', () => set(+slider.value));
     confirm.addEventListener('click', () => { audio.play('tap'); done({ type: 'raise', amount: to }); }); // the chip sound plays when the raise lands
     const presets = h('div', { class: 'presets' },
@@ -552,27 +573,28 @@ export class HoldemTable {
     const pot = res.awards.reduce((a, b) => a + b.amount, 0);
     const humanNet = res.net[HUMAN] || 0;
     const humanWon = res.awards.some((a) => a.playerId === HUMAN);
+    this.lastHumanWon = humanWon;
     const humanRev = res.revealed.find((r) => r.playerId === HUMAN);
-    bank.recordHand({ won: humanWon, showdown: res.showdown, pot, net: humanNet, handName: humanRev?.hand, handScore: humanRev?.score });
+    bank.recordHand({ won: humanWon, showdown: res.showdown, pot: this.tourney ? 0 : pot, net: this.tourney ? 0 : humanNet, handName: humanRev?.hand, handScore: humanRev?.score });   // tournament chips don't count as money
     for (const s of this.seats) s.stack = res.stacks[s.id] ?? s.stack;
-    bank.setAtTable({ tableId: this.table.id, stack: human.stack, opponents: this.seats.slice(1).map((s) => s.id) });
+    bank.setAtTable({ tableId: this.table.id, stack: this.tourney ? 0 : human.stack, opponents: this.seats.slice(1).map((s) => s.id) });
 
     // table talk about the result
-    const bigPot = humanNet >= this.table.bb * 25; // a big win for you, judged by what you gained
+    const bigPot = humanNet >= this.game.bb * 25; // a big win for you, judged by what you gained
     for (const s of this.seats.slice(1)) {
       const won = res.awards.some((a) => a.playerId === s.id);
       const rev = res.revealed.find((r) => r.playerId === s.id);
       const net = res.net[s.id] || 0;
-      const bigForThem = net >= this.table.bb * 25;
-      updateMood(s.char.persona, s.mood, net, this.table.bb);
-      const expr = bigForThem ? 'happy' : net <= -8 * this.table.bb ? 'mad' : null;
+      const bigForThem = net >= this.game.bb * 25;
+      updateMood(s.char.persona, s.mood, net, this.game.bb);
+      const expr = bigForThem ? 'happy' : net <= -8 * this.game.bb ? 'mad' : null;
       if (expr) this.setExpression(s, expr);
       if (won) { this.talk(s, bigForThem ? 'winBig' : 'winSmall', {}, bigForThem ? 0.9 : 0.35); }
       else if (rev) {
         const cat = category(rev.score);
-        if (cat >= 3 || (cat === 2 && -net >= this.table.bb * 12)) { this.talk(s, 'badBeat', {}, 0.85); }
+        if (cat >= 3 || (cat === 2 && -net >= this.game.bb * 12)) { this.talk(s, 'badBeat', {}, 0.85); }
         else if (hand.lastAggressor === s.id && cat <= 1) { this.talk(s, 'caughtBluff', {}, 0.7); }
-        else if ((res.net[s.id] || 0) <= -25 * this.table.bb) { this.talk(s, 'loseBig', {}, 0.85); }
+        else if ((res.net[s.id] || 0) <= -25 * this.game.bb) { this.talk(s, 'loseBig', {}, 0.85); }
         else this.talk(s, 'lose', {}, 0.4);
       }
       if (s.stack <= 0) { this.talk(s, 'bustOut'); this.updateSeat(s); }
@@ -590,7 +612,30 @@ export class HoldemTable {
 
   async betweenHands() {
     const human = this.human;
-    if (human.stack <= 0) {
+    if (this.tourney) {
+      if (TEST_CHAMPION && this.lastHumanWon) for (const s of this.seats.slice(1)) s.stack = 0;   // TEST: one won hand = everyone else busts
+      const alive = this.seats.filter((s) => s.stack > 0);
+      for (const s of this.seats.slice(1)) if (s.stack <= 0 && !s.out) { s.out = true; this.levelBoost++; this.updateSeat(s); }   // every knockout also pushes the blinds up a level (next hand)
+      if (human.stack <= 0 || alive.length === 1) {
+        const place = human.stack > 0 ? 1 : alive.length + 1;   // busted: everyone still holding chips finished ahead of you
+        this.placed = place; this.payout = this.table.prizes[place - 1] || 0;
+        if (place === 1) {   // the ceremony: victory fanfare, chip rain, an applauding guest and the prize plaque (it has its own Collect)
+          await this.wait(500);
+          await championship({ winner: human.name, prize: this.payout, players: this.seats.length, tableName: this.table.name });
+          await this.leave(); return false;
+        }
+        if (this.payout) { audio.play('win'); await this.wait(300); }
+        else { const s = this.rng.pick(this.seats.slice(1).filter((x) => !x.out)); if (s) this.talk(s, 'playerBust'); audio.play('lose', { volume: 0.4 }); }
+        const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][(n % 10 > 3 || Math.floor(n % 100 / 10) === 1) ? 0 : n % 10]);
+        await modal({
+          title: this.payout ? `${ordinal(place)} place — in the money` : `Out in ${ordinal(place)}`,
+          className: this.payout ? 'tourney-result paid' : 'tourney-result', dismissable: false,
+          body: (el) => el.append(h('p', {}, this.payout ? `${fmt$(this.payout)} goes to your bank.` : `The ${fmt$(this.table.buyIn)} entry is gone, and so are you. Next time.`)),
+          buttons: [{ label: this.payout ? 'Collect' : 'Back to the lobby', kind: 'primary' }],
+        });
+        await this.leave(); return false;
+      }
+    } else if (human.stack <= 0) {
       const s = this.rng.pick(this.seats.slice(1)); if (s) this.talk(s, 'playerBust');
       const choice = await this.bustModal();
       if (choice === 'leave') { await this.leave(); return false; }
@@ -633,9 +678,9 @@ export class HoldemTable {
       const p = this.hand.players.find((x) => x.id === HUMAN);
       const inPot = p?.committed || 0;
       const choice = await askLeave({
-        text: "You're in the middle of a hand.",
+        text: this.tourney ? "You're in the middle of a tournament hand." : "You're in the middle of a hand.",
         afterLabel: 'After this hand', nowLabel: 'Leave now',
-        nowNote: inPot ? `Leaving now folds your hand; the ${fmt$(inPot)} you've put in the pot stays behind.` : 'Leaving now folds your hand.',
+        nowNote: this.tourney ? `Leaving forfeits the tournament — the ${fmt$(this.table.buyIn)} entry stays behind.` : inPot ? `Leaving now folds your hand; the ${this.fmt(inPot)} you've put in the pot stays behind.` : 'Leaving now folds your hand.',
       });
       if (choice === 'now') { this.leaveNow(); return; }
       this.leaving = choice === 'after';
@@ -658,7 +703,7 @@ export class HoldemTable {
     if (this.stopped) return;
     this.stopped = true;
     this.unsubBank?.();
-    const stack = this.human.stack;
+    const stack = this.tourney ? this.payout : this.human.stack;   // tournament: only a prize comes back, the chips were never money
     const change = bank.cashOut(stack, this.table.id);
     if (change) {
       audio.play(change.up ? 'tierup' : 'tierdown');

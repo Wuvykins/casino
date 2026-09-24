@@ -4,11 +4,12 @@
 import { assets, probeAudio } from './assets.js';
 import { bank } from './bank.js';
 
-export const SFX = ['tap', 'chip', 'chips', 'deal', 'flip', 'check', 'call', 'raise', 'fold', 'win', 'bigwin', 'lose', 'allin', 'tierup', 'tierdown', 'bailout', 'shuffle', 'yourturn', 'dice', 'slotspin', 'slotreels', 'slotwin', 'slotmiss', 'slotclunk', 'slotsmall', 'slotstop', 'slotteacher', 'slotjackpot'];
+export const SFX = ['tap', 'chip', 'chips', 'deal', 'flip', 'check', 'call', 'raise', 'fold', 'win', 'bigwin', 'lose', 'allin', 'tierup', 'tierdown', 'bailout', 'shuffle', 'yourturn', 'dice', 'slotspin', 'slotreels', 'slotwin', 'slotmiss', 'slotclunk', 'slotsmall', 'slotstop', 'slotteacher', 'slotjackpot', 'victory', 'clap'];
 
 let ctx = null;
 const fileSfx = new Map();
 let unlocked = false;
+let voiceNow = null;   // the voice clip currently playing, if any
 
 
 export const audio = {
@@ -42,7 +43,8 @@ export const audio = {
   // Play a recorded line: assets/voice/<characterId>/<file>. Returns true if a clip was started.
   voice(character, file) {
     if (!this.voicesEnabled || !character || !file) return false;
-    playClip(assets.fileUrl(`voice/${character.id}/${file}`), this.voiceVolume);
+    if (voiceNow && !voiceNow.paused && !voiceNow.ended) return false;   // someone is already talking: this line is skipped rather than talked over
+    voiceNow = playClip(assets.fileUrl(`voice/${character.id}/${file}`), this.voiceVolume);
     return true;
   },
 };

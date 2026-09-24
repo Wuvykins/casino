@@ -115,12 +115,13 @@ export class BlackjackTable {
   say(text) { this.msgEl.textContent = text; }
   talk(seat, trigger, vars = {}, p = 1) {
     if (seat.isHuman) return false;
+    const E0 = this.seatEls[seat.id]; if (E0 && Date.now() - (E0.spokeAt || 0) < 2200) return false;   // still saying the last thing
     if (!this.rng.chance(Math.min(1, p * (seat.char.persona?.chatty ?? 1)))) return false;
     const line = pickLine(seat.char, trigger, { player: this.human.name, ...vars }, this.rng);
     if (!line) return false;
     audio.voice(seat.char, line.file);
     const E = this.seatEls[seat.id];
-    E.bubble.textContent = line.text; E.bubble.classList.add('show');
+    E.spokeAt = Date.now(); E.bubble.textContent = line.text; E.bubble.classList.add('show');
     clearTimeout(E.bubbleT); E.bubbleT = setTimeout(() => E.bubble.classList.remove('show'), 2600);
     return true;
   }
