@@ -1,0 +1,40 @@
+// Offline music + offline start: at http://localhost (so the service worker installs), save every song from Casino
+// Radio, then cut the network, reload, and check the game opens and a song plays from the device (a blob: source).
+import { chromium } from 'playwright';
+import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
+const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.mp4': 'video/mp4', '.json': 'application/json', '.webmanifest': 'application/manifest+json' };
+const server = http.createServer((req, res) => { const u = decodeURIComponent(req.url.split('?')[0]); const p = path.join(ROOT, u === '/' ? 'index.html' : u); if (!p.startsWith(ROOT) || !fs.existsSync(p) || fs.statSync(p).isDirectory()) { res.writeHead(404); return res.end(); } res.writeHead(200, { 'Content-Type': MIME[path.extname(p)] || 'application/octet-stream' }); if (req.method === 'HEAD') return res.end(); fs.createReadStream(p).pipe(res); });
+await new Promise((r) => server.listen(0, r));
+const url = `http://localhost:${server.address().port}/`;
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--autoplay-policy=no-user-gesture-required'] });
+const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true });
+const page = await ctx.newPage();
+const errors = [];
+page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+const enter = async () => { await page.waitForSelector('#splash.ready', { timeout: 10000 }).then(() => page.tap('#splash')).catch(() => {}); await page.waitForSelector('#splash.can-skip', { timeout: 3000 }).then(() => page.tap('#splash')).catch(() => {}); };
+await page.goto(url); await enter();
+await page.waitForSelector('input[placeholder*="call you"]'); await page.fill('input[placeholder*="call you"]', 'Dad'); await page.click("text=Let's play"); await page.waitForSelector('.lobby');
+await page.waitForFunction(() => navigator.serviceWorker?.controller || navigator.serviceWorker?.ready, null, { timeout: 20000 });
+await page.evaluate(() => navigator.serviceWorker.ready);
+await page.click('.settings-btn'); await page.click('.overlay button:has-text("Casino Radio")');
+await page.waitForSelector('.offline-row');
+const before = await page.$eval('.offline-status', (e) => e.textContent);
+await page.click('.offline-btn');
+await page.waitForFunction(() => document.querySelector('.offline-status')?.classList.contains('done'), null, { timeout: 120000 }).catch(() => errors.push('Save all songs did not finish'));
+const after = await page.$eval('.offline-status', (e) => e.textContent);
+await page.screenshot({ path: 'tests/shots/offline-radio.png' });
+console.log('before:', before, '| after:', after);
+// wait until the service worker has cached the app, then go offline and reopen
+await page.waitForFunction(async () => (await caches.keys()).some((k) => k.startsWith('casino-') && k !== 'casino-music'), null, { timeout: 60000 });
+await ctx.setOffline(true);
+await page.reload(); await enter();
+await page.waitForSelector('.lobby', { timeout: 20000 }).catch(() => errors.push('game did not open offline'));
+await page.mouse.click(400, 200); await page.waitForTimeout(2500);
+const m = await page.evaluate(async () => { const { music } = await import('/js/core/audio.js'); return { debug: music.debug(), saved: music.savedCount, total: music.songCount }; });
+const src = await page.evaluate(() => [...document.querySelectorAll('audio')].map((a) => a.src).join(' ') || '(no element in DOM)');
+console.log('offline:', JSON.stringify(m));
+if (!m.debug.track || !/playing/.test(m.debug.track)) errors.push('no song playing offline: ' + JSON.stringify(m.debug));
+await page.screenshot({ path: 'tests/shots/offline-lobby.png' });
+console.log(errors.length ? errors.join('\n') : 'offline: no problems');
+await browser.close(); server.close();

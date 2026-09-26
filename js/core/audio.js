@@ -171,10 +171,45 @@ function rampFilter(node, hz, ms) {
 function stopNode(node, ms) {
   if (!node) return;
   rampGain(node, 0, ms);
-  setTimeout(() => { try { node.el.pause(); node.el.removeAttribute('src'); node.el.load(); } catch { /* ignore */ } }, ms + 60);
+  setTimeout(() => { try { node.el.pause(); node.el.removeAttribute('src'); node.el.load(); } catch { /* ignore */ } if (node.blobUrl) URL.revokeObjectURL(node.blobUrl); }, ms + 60);
+}
+// ---------- songs on the device (offline music, v165) ----------
+// Every song is kept in its own cache ('casino-music', which the service worker never clears on updates) the first time
+// it plays, and 'Save all songs' in Casino Radio fetches the rest. A saved song plays from a blob: URL made from the
+// cached file, so it works with no connection (and no range-request tricks in the service worker). Offline, the
+// shuffle only picks songs that are saved.
+const MUSIC_CACHE = 'casino-music';
+const savedSongs = new Set();   // song URLs present in the cache
+const hasCaches = () => typeof caches !== 'undefined';
+async function loadSavedList() {
+  if (!hasCaches()) return;
+  try { const c = await caches.open(MUSIC_CACHE); for (const req of await c.keys()) savedSongs.add(new URL(req.url).pathname.split('/').pop()); } catch { /* storage blocked */ }
+}
+const isSaved = (url) => savedSongs.has(url.split('/').pop());
+async function saveSong(url) {
+  if (!hasCaches() || isSaved(url)) return true;
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok || res.status !== 200) return false;
+    const c = await caches.open(MUSIC_CACHE);
+    await c.put(url, res);
+    savedSongs.add(url.split('/').pop());
+    return true;
+  } catch { return false; }
+}
+async function songSource(url) {
+  if (hasCaches() && isSaved(url)) {
+    try { const c = await caches.open(MUSIC_CACHE); const hit = await c.match(url); if (hit) { const blobUrl = URL.createObjectURL(await hit.blob()); return { src: blobUrl, blobUrl }; } } catch { /* fall through to the network */ }
+  }
+  return { src: url, blobUrl: null };
 }
 // the songs switched on in the Setlist editor (settings.setlistOff holds the file names that are off)
-function activeList() { const off = new Set(bank.state?.settings?.setlistOff || []); return playlist.filter((u) => !off.has(u.split('/').pop())); }
+function activeList() {
+  const off = new Set(bank.state?.settings?.setlistOff || []);
+  const on = playlist.filter((u) => !off.has(u.split('/').pop()));
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) { const saved = on.filter(isSaved); if (saved.length) return saved; }   // no connection: only what's on the device
+  return on;
+}
 function nextTrack() {
   const active = activeList();
   if (!active.length) return null;
@@ -202,6 +237,8 @@ export const music = {
       }
     }
     if (playlist.length) musicFiles.set('lobby', playlist[0]);
+    await loadSavedList();
+    try { navigator.storage?.persist?.(); } catch { /* ask the browser not to clear saved songs when space runs low */ }
     // titles for the Setlist editor: assets/music/setlist.json = [{ file: 'song-1.mp3', title, artist }]
     try { const r = await fetch(assets.fileUrl('music/setlist.json'), { cache: 'no-cache' }); if (r.ok) for (const row of await r.json()) titles.set(row.file, row); } catch { /* no manifest: numbered songs */ }
     const roomUrl = assets.fileUrl('music/lobby-room.mp3');
@@ -214,24 +251,32 @@ export const music = {
   get roomWanted() { return !ducked && this.roomEnabled && audio.musicEnabled && musicFiles.has('room'); },
   has(key) { return musicFiles.has(key); },
   // every song the game found, for the Setlist editor
-  get songs() { const off = new Set(bank.state?.settings?.setlistOff || []); return playlist.map((url, i) => { const file = url.split('/').pop(); const t = titles.get(file) || {}; return { url, file, title: t.title || `Song ${i + 1}`, artist: t.artist || '', on: !off.has(file), playing: !!track && track.el.src.endsWith('/' + file) }; }); },
+  get songs() { const off = new Set(bank.state?.settings?.setlistOff || []); return playlist.map((url, i) => { const file = url.split('/').pop(); const t = titles.get(file) || {}; return { url, file, title: t.title || `Song ${i + 1}`, artist: t.artist || '', on: !off.has(file), playing: !!track && track.file === file, saved: savedSongs.has(url) }; }); },
   // pause / resume for the Casino Radio widget (a pause keeps the song where it is; resume picks it back up)
   get paused() { return !!track && track.el.paused && this.userPaused; },
   get playing() { return !!track && !track.el.paused; },
   userPaused: false,
+  // offline music: how many of the songs are on this device, and fetch the rest (onProgress(saved, total))
+  get savedCount() { return playlist.filter(isSaved).length; },
+  get songCount() { return playlist.length; },
+  async saveAll(onProgress) {
+    let failed = 0;
+    for (const url of playlist) { if (!(await saveSong(url))) failed++; onProgress?.(this.savedCount, playlist.length); }
+    return { saved: this.savedCount, total: playlist.length, failed };
+  },
   toggle() {
     if (!audio.musicEnabled) return false;
     if (track && !track.el.paused) { this.userPaused = true; rampGain(track, 0, 250); const t = track; setTimeout(() => { if (track === t && this.userPaused) t.el.pause(); }, 280); return true; }
     if (track && track.el.paused) { this.userPaused = false; track.el.play().catch(() => {}); rampGain(track, musicLevel(), 400); return true; }
     this.userPaused = false; const k = this.key || 'lobby'; this.key = null; this.play(k); return true;
   },
-  get nowPlaying() { if (!track) return null; const file = track.el.src.split('/').pop(); const t = titles.get(file) || {}; return t.title || file; },
+  get nowPlaying() { if (!track) return null; const file = track.file; const t = titles.get(file) || {}; return t.title || file; },
   setSongOn(file, on) {
     const off = new Set(bank.state.settings.setlistOff || []);
     if (on) off.delete(file); else off.add(file);
     bank.setSetting('setlistOff', [...off]);
     queue = [];                                                          // rebuild the shuffle from the new list
-    if (track && !on && track.el.src.endsWith('/' + file)) this.skip();   // switched off the one that's playing: move on
+    if (track && !on && track.file === file) this.skip();   // switched off the one that's playing: move on
     else if (!track && on && this.key) { const k = this.key; this.key = null; this.play(k); }   // the floor was quiet: start it up
   },
   // play this one now (from the Setlist editor)
@@ -246,7 +291,7 @@ export const music = {
     this.play(k);
     return true;
   },
-  debug() { return { track: track ? track.el.src.split('/').pop() + ' ' + (track.el.paused ? 'paused' : 'playing') + (track.filter ? ` lp ${Math.round(track.filter.frequency.value)}` : '') + ` gain ${track.gain?.gain.value.toFixed(2)}` : null, room: room ? (room.el.paused ? 'paused' : 'playing') + ` gain ${room.gain?.gain.value.toFixed(2)}` : null, ducked }; },
+  debug() { return { track: track ? track.file + ' ' + (track.el.paused ? 'paused' : 'playing') + (track.filter ? ` lp ${Math.round(track.filter.frequency.value)}` : '') + ` gain ${track.gain?.gain.value.toFixed(2)}` : null, room: room ? (room.el.paused ? 'paused' : 'playing') + ` gain ${room.gain?.gain.value.toFixed(2)}` : null, ducked }; },
   key: null,
   play(key) {
     if (this.key === key && track && !track.el.paused) return;
@@ -255,13 +300,22 @@ export const music = {
     if (!playlist.length || !audio.musicEnabled) return;
     const url = nextTrack(); if (!url) return;   // every song is switched off in the Setlist: the floor stays quiet (key stays set, so switching one on starts it)
     lastTrack = url;
-    const el = new Audio(url); el.preload = 'auto';
+    const el = new Audio(); el.preload = 'auto';
     const node = wire(el, { filtered: true });
+    node.file = url.split('/').pop();
     if (node.filter) node.filter.frequency.value = ducked ? TABLE_MUFFLE : 20000;
-    el.addEventListener('ended', () => { if (track !== node) return; track = null; const k = this.key; this.key = null; setTimeout(() => { if (!track && !this.key) this.play(k); }, SONG_GAP); }); // a little quiet between songs
+    const next = () => { if (track !== node) return; track = null; const k = this.key; this.key = null; setTimeout(() => { if (!track && !this.key) this.play(k); }, SONG_GAP); };
+    el.addEventListener('ended', next); // a little quiet between songs
+    el.addEventListener('error', () => { if (!el.getAttribute('src')) return; if (track === node) { stopNode(node, 0); next(); } });   // not reachable (offline, not saved): move on
     track = node;
-    el.play().catch(() => {}); // may be refused before the first tap; the gesture listener retries
-    rampGain(node, musicLevel(), 1200);
+    songSource(url).then(({ src, blobUrl }) => {
+      if (track !== node) { if (blobUrl) URL.revokeObjectURL(blobUrl); return; }
+      node.blobUrl = blobUrl;
+      el.src = src;
+      el.play().catch(() => {}); // may be refused before the first tap; the gesture listener retries
+      rampGain(node, musicLevel(), 1200);
+      if (!blobUrl) saveSong(url);   // heard it once: keep it for next time
+    });
     this.room();
   },
   // Quieter and muffled while a game is being played (like walking away from the speaker); the room sound stays in the lobby.

@@ -36,7 +36,7 @@ self.addEventListener('install', (e) => {{
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES.map((f) => new Request(f, {{ cache: 'reload' }})))).then(() => self.skipWaiting()));
 }});
 self.addEventListener('activate', (e) => {{
-  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== 'casino-music').map((k) => caches.delete(k)))).then(() => self.clients.claim()));   // saved songs (casino-music) survive updates
 }});
 // Cached files come straight from the cache (fast, works offline). Anything else goes to the network,
 // and a successful same-origin answer is kept so optional art you add later works offline too.

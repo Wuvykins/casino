@@ -295,8 +295,32 @@ export function showSettings(root, ctx, opts = {}) {
             h('button', { class: 'btn ghost small', onClick: () => { audio.play('tap'); if (music.skip()) { toast('Next song'); setTimeout(refresh, 500); } else toast('Music is off'); } }, 'Skip song ⏭'),
             h('button', { class: 'btn ghost small', onClick: () => { audio.play('tap'); showSetlist().then(refresh); } }, 'Music Library ♪'),
           ),
+          offlineRow(),
           buttons(fromSettings ? h('button', { class: 'btn ghost', onClick: () => { audio.play('tap'); page = 'settings'; render(); } }, '‹ Back') : null, h('button', { class: 'btn primary', onClick: () => close() }, 'Done')),
         ]);
+      };
+      // Songs saved on this device play with no internet. They save as they play; this saves the rest in one go.
+      const offlineRow = () => {
+        const status = h('span', { class: 'offline-status' });
+        const btn = h('button', { class: 'btn ghost small offline-btn' }, 'Save all songs');
+        const show = () => {
+          const n = music.savedCount, total = music.songCount;
+          const all = total > 0 && n >= total;
+          status.textContent = all ? `All ${total} songs saved on this device` : `${n} of ${total} songs saved for offline`;
+          status.classList.toggle('done', all);
+          btn.hidden = all;
+        };
+        btn.addEventListener('click', async () => {
+          audio.play('tap');
+          if (navigator.onLine === false) { toast('Connect to the internet to save songs'); return; }
+          btn.disabled = true; btn.textContent = 'Saving…';
+          const r = await music.saveAll((n, total) => { status.textContent = `Saving… ${n} of ${total}`; });
+          btn.disabled = false; btn.textContent = 'Save all songs';
+          show();
+          toast(r.failed ? `Saved ${r.saved} of ${r.total}. Try again on Wi-Fi for the rest.` : 'All songs saved. Music works with no internet now.', 3000);
+        });
+        show();
+        return h('div', { class: 'offline-row' }, icon('notes'), status, btn);
       };
       const render = () => { clearInterval(timer); timer = null; clear(el); if (page === 'radio') renderRadio(); else renderSettings(); };
       render();
