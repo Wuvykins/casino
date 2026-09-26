@@ -2,6 +2,7 @@
 import { h, clear, sleep, modal, toast } from './dom.js';
 import { cardEl, chipStackEl, portraitEl, creditCardEl, chooseDeckBack, askLeave, resultBanner, countTo } from './components.js';
 import { Game, scorePlay, chooseDiscard, choosePlay, pegValue, TARGET } from '../core/cribbage.js';
+import { cribNudge, luckyCribDeck, luckyStarter } from '../core/luck.js';
 import { RANK_LABEL, SUIT_GLYPH, cardKey, sameCard } from '../core/cards.js';
 import { makeRng } from '../core/rng.js';
 import { bank, fmt$ } from '../core/bank.js';
@@ -33,7 +34,7 @@ const SCENE = {
 };
 
 export class CribbageTable {
-  constructor(root, table, buyIn, opponentIds, { onLeave }) {
+  constructor(root, table, buyIn, opponentIds, { onLeave, resume = null }) {
     this.root = root; this.table = table; this.onLeave = onLeave;
     this.rng = makeRng();
     chooseDeckBack(this.rng);
@@ -43,9 +44,18 @@ export class CribbageTable {
     this.stack = buyIn; this.oppStack = table.maxBuy;
     this.name = bank.state.playerName || 'You';
     this.games = 0; this.lastLoser = null;
-    bank.buyIn(buyIn, table.id);
-    bank.setAtTable({ tableId: table.id, stack: buyIn, opponents: [this.opp] });
+    this.resume = resume?.state || null;   // a game to pick back up (scores, pegs, whose deal), used once by playGame
+    if (resume) { this.oppStack = this.resume.oppStack ?? this.oppStack; this.lastLoser = this.resume.lastLoser ?? null; this.games = this.resume.games || 0; }
+    else bank.buyIn(buyIn, table.id);
+    if (!resume) this.checkpoint(null);   // resuming: the save on disk is already this game — keep it until the next deal
     this.build();
+  }
+  // Saved before every deal (with the game's scores) and after each game is paid (no game in progress). Closing the
+  // game mid-hand resumes at the start of that hand with the scores it began with; the stake is only paid at the end.
+  checkpoint(game) {
+    if (this.stopped) return;
+    const g = game && game.phase !== 'over' ? { scores: { ...game.scores }, pegHistory: JSON.parse(JSON.stringify(game.pegHistory)), dealer: game.dealer, handNo: game.handNo } : null;
+    bank.setAtTable({ game: 'cribbage', tableId: this.table.id, stack: this.stack, opponents: [this.opp], savedAt: Date.now(), state: { oppStack: this.oppStack, lastLoser: this.lastLoser, games: this.games, game: g } });
   }
   get speed() { return bank.state.settings.aiSpeed || 1; }
   wait(ms) { return sleep(ms / this.speed); }
@@ -274,7 +284,7 @@ export class CribbageTable {
   // ---------- main loop ----------
   async run() {
     this.say(`Welcome, ${this.name}. First to 121.`);
-    await this.wait(400); this.talk('greet', {}, 0.7);
+    await this.wait(400); if (!this.resume) this.talk('greet', {}, 0.7);
     while (!this.stopped) {
       if (this.stack < this.table.stake) {
         const c = await this.bustModal();
@@ -288,17 +298,22 @@ export class CribbageTable {
 
   async playGame() {
     // the loser of the last game deals; the first game is a cut
-    const dealer = this.lastLoser || (this.rng.chance(0.5) ? HUMAN : this.opp);
+    const saved = this.resume?.game; this.resume = null;
+    const dealer = saved ? saved.dealer : this.lastLoser || (this.rng.chance(0.5) ? HUMAN : this.opp);
     const game = new Game({ rng: this.rng, players: [HUMAN, this.opp], dealer });
-    this.game = game; this.cursor = 0; this.games++;
+    if (saved) { game.scores = { ...saved.scores }; game.pegHistory = saved.pegHistory; game.handNo = saved.handNo; }   // deal() moves the crib on as usual
+    else this.games++;
+    this.game = game; this.cursor = 0;
     this.updatePegs(game);
     this.stakeNote(game);
     await this.wait(400);
-    this.say(`${this.boardName(dealer)} deal${dealer === HUMAN ? '' : 's'} first.`);
+    const next = saved && saved.handNo > 0 ? game.pone : dealer;   // who deals the hand we're resuming
+    this.say(saved ? `Welcome back — ${game.scores[HUMAN]} to ${game.scores[this.opp]}. ${this.boardName(next)} deal${next === HUMAN ? '' : 's'}.` : `${this.boardName(dealer)} deal${dealer === HUMAN ? '' : 's'} first.`);
     await this.waitDeal();
     while (game.phase !== 'over' && !this.stopped) {
       await this.playHand(game);
       if (this.stopped || game.phase === 'over') break;
+      this.checkpoint(game);   // hand counted: closing now comes back to the next deal with these scores
       if (this.leaving) this.say('Finishing the game, then we go.');
       else this.say(`${this.boardName(game.pone)} deal${game.pone === HUMAN ? '' : 's'} next.`);   // the count is done; the deal passes to the pone
       await this.waitDeal();
@@ -310,7 +325,11 @@ export class CribbageTable {
   stakeNote() { this.dealerTag.textContent = `${fmt$(this.table.stake)} a game`; }
 
   async playHand(game) {
-    game.deal();
+    this.checkpoint(game);   // closing the game from here resumes at this deal, same scores
+    // luck: `nudge` hands in 100 go your way — a strong six dealt to you, or a cut that helps you more than them
+    const luck = cribNudge(this.rng, this.table.nudge);
+    game.deal(luck === 'hand' ? (dealer, pone) => luckyCribDeck(pone === HUMAN, this.rng) : null);
+    game.beforeCut = luck === 'cut' ? (g) => luckyStarter(g, HUMAN, this.rng) : null;
     this.clearHandUI();
     this.renderDealerTag(game);
     audio.play('shuffle', { volume: 0.8 });
@@ -597,7 +616,7 @@ export class CribbageTable {
     this.say(humanWon ? `You win the game${tail}!` : `${this.char.name} wins the game${tail}.`);
     if (humanWon) this.talk(r.skunk ? 'cribGotSkunked' : 'cribGameLose'); else this.talk(r.skunk ? 'cribSkunked' : 'cribGameWin');
     bank.recordHand({ won: humanWon, showdown: false, pot: amount, net: humanWon ? amount : -amount, handName: humanWon && r.skunk ? (r.skunk === 2 ? 'Double skunk' : 'Skunk') : null, handScore: humanWon ? r.skunk : 0 });
-    bank.setAtTable({ tableId: this.table.id, stack: this.stack, opponents: [this.opp] });
+    this.checkpoint(null);
     if (humanWon) { audio.play(r.skunk ? 'bigwin' : 'win'); await this.wait(300); if (r.skunk) await this.winBanner(amount, label, true); else await resultBanner(this.el, { type: 'win', amount, caption: '\u2660   GAME WON   \u2660', hold: 2600 }); }
     else { audio.play('lose', { volume: 0.4 }); await this.wait(300); await resultBanner(this.el, { type: 'lose', amount: -amount, title: `${this.char.name} wins`, caption: label ? label.toUpperCase().replace('!', '') : 'GAME OVER', hold: 2600 }); }
     const choice = await modal({

@@ -4,10 +4,10 @@
 import { assets, probeAudio } from './assets.js';
 import { bank } from './bank.js';
 
-export const SFX = ['tap', 'chip', 'chips', 'deal', 'flip', 'check', 'call', 'raise', 'fold', 'win', 'bigwin', 'lose', 'allin', 'tierup', 'tierdown', 'bailout', 'shuffle', 'yourturn', 'dice', 'slotspin', 'slotreels', 'slotsmall', 'slotstop', 'slotteacher', 'slotjackpot', 'victory', 'clap', 'crib1', 'crib2', 'count'];
+export const SFX = ['tap', 'chip', 'chips', 'deal', 'flip', 'check', 'call', 'raise', 'fold', 'win', 'bigwin', 'lose', 'allin', 'tierup', 'tierdown', 'bailout', 'shuffle', 'yourturn', 'dice', 'slotspin', 'slotreels', 'slotsmall', 'slotstop', 'slotteacher', 'slotjackpot', 'victory', 'clap', 'crib1', 'crib2', 'count', 'farkle'];
 
 // effects that reuse another effect's recording when they have no file of their own (Nic, v132)
-const ALIAS = { chips: 'allin', flip: 'deal', tierdown: 'lose' };
+const ALIAS = { chips: 'allin', flip: 'deal', tierdown: 'lose', farkle: 'lose' };
 
 let ctx = null;
 const fileSfx = new Map();

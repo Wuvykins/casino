@@ -1,5 +1,5 @@
 // App entry: boots the save, probes art, routes between screens.
-import { h, $, clear, modal } from './ui/dom.js';
+import { h, $, clear, modal, toast } from './ui/dom.js';
 import { bank } from './core/bank.js';
 import { assets } from './core/assets.js';
 import { audio, music } from './core/audio.js';
@@ -48,7 +48,43 @@ function resumeTourney(snap) {
 }
 
 // On launch: a tournament was left mid-way (closed, phone put away, or Save & leave) — offer to jump straight back in.
+// A cash table / cribbage / farkle / blackjack game that was open when the app closed (bank.state.atTable with .game):
+// offer to sit straight back down; 'Cash out' returns the chips to the bank as before.
+const TABLE_CLASSES = { holdem: HoldemTable, blackjack: BlackjackTable, cribbage: CribbageTable, farkle: FarkleTable };
+const GAME_NAMES = { holdem: "Texas Hold'em", blackjack: 'Blackjack', cribbage: 'Cribbage', farkle: 'Farkle' };
+function resumeTable(snap) {
+  const table = tableById(snap.tableId), Cls = TABLE_CLASSES[snap.game];
+  if (!table || !Cls) { bank.settleAtTable(); return goLobby(); }
+  music.duck(true);
+  current = new Cls(root, table, snap.stack, snap.opponents || [], { onLeave: goLobby, resume: snap });
+  current.run().catch((err) => { console.error(err); goLobby(); });
+}
+async function offerTableResume() {
+  const snap = bank.state.atTable;
+  const table = snap?.game && tableById(snap.tableId);
+  if (!table) return false;
+  const fmt = (n) => '$' + Math.round(n).toLocaleString('en-US');
+  const g = snap.state?.game;
+  const score = snap.game === 'cribbage' && g ? ` · ${g.scores.you} to ${g.scores[snap.opponents[0]]}` : '';
+  const go = await modal({
+    title: 'Pick up where you left off?', className: 'resume-offer', dismissable: false,
+    body: (el) => el.append(
+      h('p', { class: 'resume-name' }, table.name),
+      h('p', { class: 'muted' }, `${GAME_NAMES[snap.game]} · ${fmt(snap.stack)} on the table${score}.`),
+      h('p', { class: 'muted small' }, 'Cash out puts the chips back in your bank.'),
+    ),
+    buttons: [{ label: 'Cash out', kind: 'ghost', value: false }, { label: 'Continue', kind: 'primary', value: true }],
+  });
+  if (go) { resumeTable(snap); return true; }
+  const change = bank.settleAtTable();
+  goLobby();
+  toast(`${fmt(snap.stack)} back in your bank.`);
+  if (change) toast(change.up ? `Card upgraded to ${change.to.name}!` : `Card is now ${change.to.name}.`, 3000);
+  return false;
+}
+
 async function offerResume() {
+  if (await offerTableResume()) return;   // back at the table: the tournament offer can wait until next launch
   const snap = bank.state.tourney;
   const table = snap && tableById(snap.tableId);
   if (!table) return;
@@ -167,7 +203,8 @@ window.addEventListener('resize', checkOrientation);
 checkOrientation();
 
 // Leaving the page mid-session: chips are snapshotted after every hand, and restored to the bank on next load.
-const snapshot = () => { if (current && !current.stopped) bank.setAtTable({ tableId: current.table.id, stack: current.tourney ? 0 : current.human.stack, opponents: [] }); };   // tournament chips aren't money
+// Tables that save their own resume points (atTable.game) are left alone: their last save is the safe place to come back to.
+const snapshot = () => { if (current && !current.stopped && !bank.state.atTable?.game) bank.setAtTable({ tableId: current.table.id, stack: current.tourney ? 0 : current.human.stack, opponents: [] }); };   // tournament chips aren't money
 window.addEventListener('pagehide', snapshot);
 
 // "Exit Game" (Settings): chips are snapshotted, the sound stops, and the window closes where the platform allows

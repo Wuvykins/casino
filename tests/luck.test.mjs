@@ -1,3 +1,7 @@
+import { Game as FkGame, hasScore as fkHasScore, bestKeep as fkBest } from '../js/core/farkle.js';
+import { farkleSave } from '../js/core/luck.js';
+import { Game as CribGame, scoreHand as cribScore } from '../js/core/cribbage.js';
+import { cribNudge, luckyCribDeck, luckyStarter, bestKeepEV } from '../js/core/luck.js';
 import assert from 'node:assert/strict';
 import { Hand } from '../js/core/poker.js';
 import { evaluate, category } from '../js/core/evaluator.js';
@@ -117,5 +121,33 @@ test('calibration: luck helps a middling stand-in, and touches roughly a fifth o
   console.log(`     Dad without luck: ${a.dad.toFixed(1)} bb/100; with luck: ${b.dad.toFixed(1)} bb/100 (${b.luckyHands} of 3000 hands touched)`);
   assert.ok(b.dad > a.dad, 'luck should help');
   assert.ok(b.luckyHands > 400 && b.luckyHands < 900, 'touched ' + b.luckyHands);
+});
+test('cribbage: a lucky deal gives you a strong six, a lucky cut helps you more than them', () => {
+  const rng = makeRng(77);
+  for (const pone of [true, false]) {
+    const g = new CribGame({ rng, players: ['you', 'opp'], dealer: pone ? 'opp' : 'you' });
+    g.deal((d, p) => luckyCribDeck(p === 'you', rng));
+    assert.ok(bestKeepEV(g.hands.you) >= LUCK.cribHandMinEV, 'six not strong: ' + bestKeepEV(g.hands.you));
+  }
+  let helped = 0;
+  for (let i = 0; i < 200; i++) {
+    const g = new CribGame({ rng, players: ['you', 'opp'], dealer: i % 2 ? 'you' : 'opp' });
+    g.deal();
+    g.beforeCut = (game) => luckyStarter(game, 'you', rng);
+    g.discard('you', g.hands.you.slice(0, 2)); g.discard('opp', g.hands.opp.slice(0, 2));
+    const mine = cribScore(g.kept.you, g.starter).total + (g.dealer === 'you' ? cribScore(g.crib, g.starter, true).total : 0);
+    const theirs = cribScore(g.kept.opp, g.starter).total + (g.dealer === 'opp' ? cribScore(g.crib, g.starter, true).total : 0);
+    if (mine > theirs) helped++;
+  }
+  assert.ok(helped > 150, 'cut helped only ' + helped + ' of 200');
+  assert.equal(cribNudge(rng, 0), null);
+});
+test('farkle: a saved roll scores, but modestly, and only on your turn', () => {
+  const rng = makeRng(9);
+  const g = new FkGame({ rng, players: ['you', 'opp'], first: 'you' });
+  for (let i = 0; i < 50; i++) { const d = farkleSave(g, 'you', 100, rng); assert.ok(d && fkHasScore(d) && fkBest(d).points <= 400); }
+  const o = new FkGame({ rng, players: ['you', 'opp'], first: 'opp' });
+  assert.equal(farkleSave(o, 'you', 100, rng), null);
+  assert.equal(farkleSave(g, 'you', 0, rng), null);
 });
 console.log(`\n${passed} tests passed`);

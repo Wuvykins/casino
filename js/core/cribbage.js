@@ -90,11 +90,12 @@ export class Game {
   get pone() { return this.other(this.dealer); }
   emit(type, data = {}) { this.events.push({ type, ...data }); }
 
-  deal() {
+  // arrange(dealer, pone) may return a deck to deal from instead of a fresh shuffle (the luck system; cards pop from the END)
+  deal(arrange = null) {
     if (this.phase === 'over') throw new Error('game over');
     if (this.handNo > 0) this.dealer = this.pone;
     this.handNo++;
-    const deck = shuffle(freshDeck(), this.rng);
+    const deck = (arrange && arrange(this.dealer, this.pone)) || shuffle(freshDeck(), this.rng);
     this.deck = deck;
     this.hands = {}; this.kept = {}; this.crib = []; this.starter = null;
     for (const p of this.players) this.hands[p] = [];
@@ -123,6 +124,7 @@ export class Game {
   }
 
   cut() {
+    if (this.beforeCut) this.beforeCut(this);   // the luck system may move a card to the top of the deck first
     this.starter = this.deck.pop();
     this.emit('cut', { card: this.starter });
     if (this.starter.r === 11) this.award(this.dealer, 2, 'His heels');

@@ -13,7 +13,7 @@ const defaults = () => ({
   transactions: [],   // { t, type: 'buyin'|'cashout'|'bailout', amount, table, bankAfter }
   stats: { handsPlayed: 0, handsWon: 0, showdownsWon: 0, biggestPot: 0, lifetimeNet: 0, bestHand: '', bestHandScore: 0, tierHistory: [] },
   settings: { sound: true, voices: true, autoDeal: true, aiSpeed: 1, showTips: true },
-  atTable: null,      // { tableId, stack, opponents:[ids] } snapshot so a reload doesn't lose chips
+  atTable: null,      // { tableId, stack, opponents:[ids] } snapshot so a reload doesn't lose chips; with `game` + `state` it can be resumed (v167)
   tourney: null,      // a hold'em tournament in progress, saved before every hand so it can be resumed (see HoldemTable.saveTourney)
 });
 
@@ -28,7 +28,9 @@ export const bank = {
       this.state.settings = { ...defaults().settings, ...(this.state.settings || {}) };
       this.state.stats = { ...defaults().stats, ...(this.state.stats || {}) };
     } catch { this.state = defaults(); }
-    // If the app closed while sitting at a table, the chips go back to the bank.
+    // If the app closed while sitting at a table, the chips go back to the bank — unless the table saved enough to
+    // pick the game back up (atTable.game), in which case the launch screen offers to continue (app.offerResume).
+    if (this.state.atTable?.game && this.state.atTable.stack > 0) { this.save(); return this.state; }
     if (this.state.atTable && this.state.atTable.stack > 0) {
       this.state.bank += this.state.atTable.stack;
       this.log('cashout', this.state.atTable.stack, this.state.atTable.tableId + ' (restored)');
@@ -92,6 +94,13 @@ export const bank = {
   },
 
   setAtTable(snapshot) { this.state.atTable = snapshot; this.save(); },
+  // a resumable table the player chose not to go back to: its chips return to the bank now
+  settleAtTable() {
+    const a = this.state.atTable; if (!a) return null;
+    this.state.atTable = null;
+    if (!(a.stack > 0)) { this.save(); return null; }
+    return this.cashOut(a.stack, a.tableId + ' (left)');
+  },
   setTourney(snapshot) { this.state.tourney = snapshot; this.save(); },
   setName(name) { this.state.playerName = name.trim().slice(0, 18); this.save(); },
   setSetting(k, v) { this.state.settings[k] = v; this.save(); },

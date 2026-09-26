@@ -41,7 +41,7 @@ const SPOTS_ART = [{ x: 24.4, y: 53.6 }, { x: 50, y: 63 }, { x: 76.1, y: 54.3 }]
 const PORTRAIT_X_ART = [11, 89];
 
 export class BlackjackTable {
-  constructor(root, table, buyIn, companionIds, { onLeave }) {
+  constructor(root, table, buyIn, companionIds, { onLeave, resume = null }) {
     this.root = root; this.table = table; this.onLeave = onLeave;
     this.rng = makeRng();
     chooseDeckBack(this.rng);
@@ -54,9 +54,23 @@ export class BlackjackTable {
     if (ids[0]) this.seats.push(this.mkSeat(ids[0], 0));
     this.seats.push({ spot: 1, id: HUMAN, name: bank.state.playerName || 'You', isHuman: true, stack: buyIn, char: null, bet: 0 });
     if (ids[1]) this.seats.push(this.mkSeat(ids[1], 2));
-    bank.buyIn(buyIn, table.id);
-    bank.setAtTable({ tableId: table.id, stack: buyIn, opponents: ids });
+    this.resumed = !!resume;
+    if (resume) {   // back from a closed game: everyone's chips as they were at the start of the last round
+      const st = resume.state || {};
+      for (const saved of st.seats || []) { const s = this.seatById(saved.id); if (s) s.stack = saved.stack; }
+      if (st.lastBet) this.lastBet = st.lastBet;
+    } else bank.buyIn(buyIn, table.id);
+    this.checkpoint();
     this.build();
+  }
+  // Saved whenever a round starts (before any bet leaves a stack) and after it's paid: a round cut off by closing
+  // the game is simply not played — the bets go back and it's the betting screen again.
+  checkpoint() {
+    if (this.stopped) return;
+    bank.setAtTable({
+      game: 'blackjack', tableId: this.table.id, stack: this.human.stack, opponents: this.seats.filter((s) => !s.isHuman).map((s) => s.id), savedAt: Date.now(),
+      state: { lastBet: this.lastBet, seats: this.seats.map((s) => ({ id: s.id, stack: s.stack })) },
+    });
   }
   mkSeat(id, spot) { const c = characterById(id); return { spot, id, name: c.name, isHuman: false, stack: this.table.maxBuy, char: c, bet: 0 }; }
   get human() { return this.seats.find((s) => s.isHuman); }
@@ -129,8 +143,8 @@ export class BlackjackTable {
 
   // ---------- main loop ----------
   async run() {
-    this.say(`Welcome to ${this.table.name}. Place your bet.`);
-    for (const s of this.seats) if (!s.isHuman && this.talk(s, 'greet', {}, 0.6)) await this.wait(500);
+    this.say(this.resumed ? `Welcome back to ${this.table.name}. Place your bet.` : `Welcome to ${this.table.name}. Place your bet.`);
+    if (!this.resumed) for (const s of this.seats) if (!s.isHuman && this.talk(s, 'greet', {}, 0.6)) await this.wait(500);   // no 'deal me in' when coming back
     while (!this.stopped) {
       const ok = await this.bettingPhase();
       if (!ok) break;
@@ -151,6 +165,7 @@ export class BlackjackTable {
       // busted?
       if (me.stack < this.table.minBet) { this.bustModal().then((c) => resolve(c === 'rebuy' ? this.bettingPhase() : (this.leave(), false))); return; }
       if (this.leaving) { this.leave(); resolve(false); return; }
+      this.checkpoint();   // a rebuy just now counts; closing mid-round comes back to this point
       this.clearTable();
       // companions choose their bets now
       for (const s of this.seats) if (!s.isHuman) {
@@ -410,7 +425,7 @@ export class BlackjackTable {
       else if (pr.net < 0) this.flyChips(E.betEl, this.dealerEl, -pr.net);
     }
     bank.recordHand({ won: humanNet > 0, showdown: false, pot: humanNet > 0 ? humanNet + humanBet : 0, net: humanNet, handName: humanNatural ? 'Blackjack' : null, handScore: humanNatural ? 1 : 0 });
-    bank.setAtTable({ tableId: this.table.id, stack: this.human.stack, opponents: this.seats.filter((s) => !s.isHuman).map((s) => s.id) });
+    this.checkpoint();
     const big = humanNatural || humanNet >= this.table.minBet * 8;
     if (humanNet > 0) { audio.play(big ? 'bigwin' : 'win'); await this.wait(400); if (big) await this.winBanner(humanNet, humanNatural ? 'Blackjack!' : null, true); else await resultBanner(this.felt, { type: 'win', amount: humanNet }); }
     else if (humanNet < 0) { audio.play('lose', { volume: 0.4 }); await this.wait(300); await resultBanner(this.felt, { type: humanAllBust ? 'bust' : 'lose', amount: humanNet }); }

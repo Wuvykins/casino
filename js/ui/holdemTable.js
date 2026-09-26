@@ -14,6 +14,7 @@ import { pickLine } from '../content/lines.js';
 import { MAX_SEATS, TOURNEY_BLINDS, TOURNEY_LEVEL_HANDS } from '../content/tables.js';
 import { showSettings, noteButton, icon } from './lobby.js';
 import { championship } from './championship.js';
+import { showHandRankings } from './handRankings.js';
 
 // tournament chips are counted, not dollars
 export const fmtChips = (n) => Math.round(n).toLocaleString('en-US');
@@ -87,10 +88,12 @@ export class HoldemTable {
       const c = characterById(id);
       this.seats.push({ seat: seats[i], id, name: c.name, isHuman: false, stack: this.tourney ? table.chips : table.maxBuy, char: c, mood: { tilt: 0 }, out: false });
     });
-    this.resumed = !!(resume && this.tourney);
-    if (this.resumed) this.restoreTourney(resume);
+    this.resumed = !!resume;
+    if (resume && this.tourney) this.restoreTourney(resume);
+    else if (resume) this.restoreCash(resume.state || {});
     else bank.buyIn(this.tourney ? table.buyIn : buyIn, table.id);
-    bank.setAtTable({ tableId: table.id, stack: this.tourney ? 0 : buyIn, opponents: opponentIds });   // tournament chips aren't money: nothing to restore on a reload
+    if (this.tourney) bank.setAtTable({ tableId: table.id, stack: 0, opponents: opponentIds });   // tournament chips aren't money: nothing to restore on a reload
+    else this.checkpoint();
     this.refreshReads();
     this.build();
   }
@@ -119,6 +122,22 @@ export class HoldemTable {
     if (r.humanStats) this.humanStats = { ...this.humanStats, ...r.humanStats };
   }
 
+  // ---------- cash table save ----------
+  // Written before every deal and after every hand: closing the game resumes at this table with everyone's chips,
+  // and a hand cut off in the middle is dealt again from the top (nothing the hand took is lost).
+  checkpoint() {
+    if (this.tourney || this.stopped) return;
+    bank.setAtTable({
+      game: 'holdem', tableId: this.table.id, stack: this.human.stack, opponents: this.seats.slice(1).map((s) => s.id), savedAt: Date.now(),
+      state: { button: this.button, handNo: this.handNo, seats: this.seats.slice(1).map((s) => ({ id: s.id, stack: s.stack, tilt: s.mood?.tilt || 0 })), humanStats: this.humanStats },
+    });
+  }
+  restoreCash(st) {
+    this.button = st.button || 0; this.handNo = st.handNo || 0;
+    for (const saved of st.seats || []) { const s = this.seatById(saved.id); if (!s) continue; s.stack = saved.stack; if (s.mood) s.mood.tilt = saved.tilt || 0; }
+    if (st.humanStats) this.humanStats = { ...this.humanStats, ...st.humanStats };
+  }
+
   // Everyone at the table knows everyone else's tendencies (they're friends and family, after all).
   // The human's read is learned from how they actually play; see updateReads().
   refreshReads() {
@@ -138,7 +157,10 @@ export class HoldemTable {
     this.topbar = h('div', { class: 'topbar table-top' },
       h('button', { class: 'btn ghost small leave-btn', onClick: () => this.requestLeave() }, '‹ Leave table'),
       h('div', { class: 'tt-title' }, this.tourney ? `${this.table.name} · Blinds ${fmtChips(this.game.sb)}/${fmtChips(this.game.bb)}` : this.table.name),
-      h('div', { class: 'topbar-bank' }, 'Bank ', h('b', { class: 'bank-amt' }, fmt$(bank.state.bank))),
+      h('div', { class: 'topbar-right' },
+        h('button', { class: 'help-btn', title: 'Hand rankings', 'aria-label': 'Hand rankings', onClick: () => { audio.play('tap'); showHandRankings(this.currentHand()); } }, '?'),
+        h('div', { class: 'topbar-bank' }, 'Bank ', h('b', { class: 'bank-amt' }, fmt$(bank.state.bank))),
+      ),
     );
     this.felt = h('div', { class: 'felt' });
     assets.bg(this.felt, 'table.felt.holdem');
@@ -187,7 +209,7 @@ export class HoldemTable {
   async run() {
     if (this.resumed) {
       const left = this.seats.filter((x) => x.stack > 0).length;
-      this.say(null, `Welcome back. ${left} players left, blinds ${fmtChips(this.game.sb)}/${fmtChips(this.game.bb)}.`);
+      this.say(null, this.tourney ? `Welcome back. ${left} players left, blinds ${fmtChips(this.game.sb)}/${fmtChips(this.game.bb)}.` : `Welcome back to ${this.table.name}.`);
       for (const s of this.seats) this.updateSeat(s);
       await this.wait(1200);
     } else this.say(null, this.tourney ? `Welcome to the ${this.table.name}. ${fmtChips(this.table.chips)} chips each, blinds ${fmtChips(this.game.sb)}/${fmtChips(this.game.bb)} — last two standing get paid.` : `Welcome to ${this.table.name}. Blinds ${fmt$(this.table.sb)}/${fmt$(this.table.bb)}.`);
@@ -232,6 +254,7 @@ export class HoldemTable {
       }
     }
     this.saveTourney();   // tournament: closing the game from here on resumes at this hand
+    this.checkpoint();    // cash table: same idea
     const players = this.seats.filter((s) => s.stack > 0).map((s) => ({ id: s.id, name: s.name, stack: s.stack, seat: s.seat }));
     // move the button to the next occupied seat
     this.button = (this.button + 1) % players.length;
@@ -563,6 +586,14 @@ export class HoldemTable {
     }, delay);
   }
 
+  // your hand right now, for the rankings card (only once the flop is out and you're still in)
+  currentHand() {
+    const p = this.hand?.players.find((x) => x.id === HUMAN);
+    if (!p || p.folded || this.hand.finished || this.hand.board.length < 3) return null;
+    const score = evaluate([...p.cards, ...this.hand.board]);
+    return { cat: category(score), text: describe(score) };
+  }
+
   playHandInfo() {
     const p = this.hand.players.find((x) => x.id === HUMAN);
     if (!p || p.folded) { this.handInfo.textContent = ''; return; }
@@ -643,7 +674,7 @@ export class HoldemTable {
     const humanRev = res.revealed.find((r) => r.playerId === HUMAN);
     bank.recordHand({ won: humanWon, showdown: res.showdown, pot: this.tourney ? 0 : pot, net: this.tourney ? 0 : humanNet, handName: humanRev?.hand, handScore: humanRev?.score });   // tournament chips don't count as money
     for (const s of this.seats) s.stack = res.stacks[s.id] ?? s.stack;
-    bank.setAtTable({ tableId: this.table.id, stack: this.tourney ? 0 : human.stack, opponents: this.seats.slice(1).map((s) => s.id) });
+    if (this.tourney) bank.setAtTable({ tableId: this.table.id, stack: 0, opponents: this.seats.slice(1).map((s) => s.id) }); else this.checkpoint();
 
     // table talk about the result
     const bigPot = humanNet >= this.game.bb * 25; // a big win for you, judged by what you gained

@@ -31,21 +31,23 @@ export const BLACKJACK_TABLES = [
 
 // Cribbage: a stake per game. A skunk (loser under 91) pays double, a double skunk (under 61) triple.
 // You buy in with enough to cover a few games; whatever's left comes back to the bank when you leave.
+// nudge = hands in 100 that go your way (a strong six, or a cut that helps you) — see cribNudge in core/luck.js
 export const CRIBBAGE_TABLES = [
-  { id: 'crib-10',   game: 'cribbage', name: 'Cribbage $10 a game',    stake: 10,   minBuy: 30,    maxBuy: 200,    tier: 1 },
-  { id: 'crib-50',   game: 'cribbage', name: 'Cribbage $50 a game',    stake: 50,   minBuy: 150,   maxBuy: 1000,   tier: 2 },
-  { id: 'crib-250',  game: 'cribbage', name: 'Cribbage $250 a game',   stake: 250,  minBuy: 750,   maxBuy: 5000,   tier: 3 },
-  { id: 'crib-1000', game: 'cribbage', name: 'Cribbage $1,000 a game', stake: 1000, minBuy: 3000,  maxBuy: 20000,  tier: 4 },
-  { id: 'crib-5000', game: 'cribbage', name: 'Cribbage $5,000 a game', stake: 5000, minBuy: 15000, maxBuy: 100000, tier: 5 },
+  { id: 'crib-10',   game: 'cribbage', name: 'Cribbage $10 a game',    stake: 10,   minBuy: 30,    maxBuy: 200,    tier: 1, nudge: 40 },
+  { id: 'crib-50',   game: 'cribbage', name: 'Cribbage $50 a game',    stake: 50,   minBuy: 150,   maxBuy: 1000,   tier: 2, nudge: 35 },
+  { id: 'crib-250',  game: 'cribbage', name: 'Cribbage $250 a game',   stake: 250,  minBuy: 750,   maxBuy: 5000,   tier: 3, nudge: 30 },
+  { id: 'crib-1000', game: 'cribbage', name: 'Cribbage $1,000 a game', stake: 1000, minBuy: 3000,  maxBuy: 20000,  tier: 4, nudge: 25 },
+  { id: 'crib-5000', game: 'cribbage', name: 'Cribbage $5,000 a game', stake: 5000, minBuy: 15000, maxBuy: 100000, tier: 5, nudge: 20 },
 ];
 
 // Farkle: everybody puts up the stake, the winner takes the pot. First to 10,000.
+// save = how many of your farkles in 100 quietly come up scoring instead (farkleSave in core/luck.js)
 export const FARKLE_TABLES = [
-  { id: 'fk-10',   game: 'farkle', name: 'Farkle $10 a game',    stake: 10,   minBuy: 30,    maxBuy: 200,    tier: 1 },
-  { id: 'fk-50',   game: 'farkle', name: 'Farkle $50 a game',    stake: 50,   minBuy: 150,   maxBuy: 1000,   tier: 2 },
-  { id: 'fk-250',  game: 'farkle', name: 'Farkle $250 a game',   stake: 250,  minBuy: 750,   maxBuy: 5000,   tier: 3 },
-  { id: 'fk-1000', game: 'farkle', name: 'Farkle $1,000 a game', stake: 1000, minBuy: 3000,  maxBuy: 20000,  tier: 4 },
-  { id: 'fk-5000', game: 'farkle', name: 'Farkle $5,000 a game', stake: 5000, minBuy: 15000, maxBuy: 100000, tier: 5 },
+  { id: 'fk-10',   game: 'farkle', name: 'Farkle $10 a game',    stake: 10,   minBuy: 30,    maxBuy: 200,    tier: 1, save: 50 },
+  { id: 'fk-50',   game: 'farkle', name: 'Farkle $50 a game',    stake: 50,   minBuy: 150,   maxBuy: 1000,   tier: 2, save: 45 },
+  { id: 'fk-250',  game: 'farkle', name: 'Farkle $250 a game',   stake: 250,  minBuy: 750,   maxBuy: 5000,   tier: 3, save: 40 },
+  { id: 'fk-1000', game: 'farkle', name: 'Farkle $1,000 a game', stake: 1000, minBuy: 3000,  maxBuy: 20000,  tier: 4, save: 35 },
+  { id: 'fk-5000', game: 'farkle', name: 'Farkle $5,000 a game', stake: 5000, minBuy: 15000, maxBuy: 100000, tier: 5, save: 30 },
 ];
 
 export const SLOT_TABLES = [

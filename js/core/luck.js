@@ -9,6 +9,8 @@
 import { freshDeck, shuffle } from './cards.js';
 import { evaluate, category } from './evaluator.js';
 import { preflopStrength } from './ai.js';
+import { expectedHandScore, scoreHand } from './cribbage.js';
+import { hasScore, bestKeep } from './farkle.js';
 
 export const LUCK = {
   // hold'em: how often is set per table (`nudge`, hands per 100, in content/tables.js); these three set the MIX of kinds
@@ -159,4 +161,70 @@ export function bjDealerBusts(shoe, dealerCards, hitsSoft17, rng, window = 6) {
     }
   }
   return false;
+}
+
+// ---------- cribbage ----------
+// Each cribbage table sets `nudge` = hands in 100 that go your way (content/tables.js). A nudged hand is one of two kinds,
+// mixed by LUCK.cribHandShare: 'hand' — your six cards are dealt so there's a strong four to keep (what you do with it is
+// still up to you); 'cut' — after both players have thrown, the starter is one that helps you more than them.
+LUCK.cribHandShare = 0.5;
+LUCK.cribHandMinEV = 9;   // a 'hand' nudge: the best four you can keep average at least this many points before the cut
+
+export function cribNudge(rng, per100) {
+  if (!(per100 > 0) || rng.next() * 100 >= per100) return null;
+  return rng.chance(LUCK.cribHandShare) ? 'hand' : 'cut';
+}
+
+// Best average show score of any four out of these six.
+export function bestKeepEV(six) {
+  let best = 0;
+  for (let i = 0; i < 6; i++) for (let j = i + 1; j < 6; j++) {
+    const ev = expectedHandScore(six.filter((_, k) => k !== i && k !== j), six);
+    if (ev > best) best = ev;
+  }
+  return best;
+}
+
+// A deck for Game.deal() where the human's six cards have a strong keep in them. Deal order pops from the end,
+// pone first, alternating, so the human's cards sit at 51,49,…,41 (pone) or 50,48,…,40 (dealer). Null if none found.
+export function luckyCribDeck(humanIsPone, rng, tries = 60) {
+  const off = humanIsPone ? 0 : 1;
+  for (let t = 0; t < tries; t++) {
+    const deck = shuffle(freshDeck(), rng);
+    const six = [0, 1, 2, 3, 4, 5].map((i) => deck[51 - (2 * i + off)]);
+    if (bestKeepEV(six) >= LUCK.cribHandMinEV) return deck;
+  }
+  return null;
+}
+
+// Called just before the cut: put a starter on top that helps the human (hand + crib if theirs + his heels) more than the
+// opponent — picked at random from the better part of the deck, not always the single best card, so it doesn't look staged.
+export function luckyStarter(game, humanId, rng) {
+  const opp = game.other(humanId);
+  const worth = (c) => {
+    let v = scoreHand(game.kept[humanId], c).total - scoreHand(game.kept[opp], c).total;
+    const crib = scoreHand(game.crib, c, true).total;
+    v += game.dealer === humanId ? crib : -crib;
+    if (c.r === 11) v += game.dealer === humanId ? 2 : -2;
+    return v;
+  };
+  const scored = game.deck.map((c, i) => ({ i, v: worth(c) })).filter((x) => x.v > 0);
+  if (!scored.length) return false;
+  scored.sort((a, b) => b.v - a.v);
+  const pool = scored.slice(0, Math.max(1, Math.ceil(scored.length / 2)));
+  const pick = pool[rng.int(pool.length)].i, L = game.deck.length - 1;
+  [game.deck[L], game.deck[pick]] = [game.deck[pick], game.deck[L]];
+  return true;
+}
+
+// ---------- farkle ----------
+// Each farkle table sets `save` = how many of YOUR farkles in 100 are quietly saved (content/tables.js): the dice come up
+// again with something modest to keep (a 1, a 5, a small set — never a jackpot roll), so the turn carries on.
+export function farkleSave(game, humanId, per100, rng) {
+  if (game.current !== humanId || !(per100 > 0) || rng.next() * 100 >= per100) return null;
+  for (let t = 0; t < 40; t++) {
+    const dice = Array.from({ length: game.diceLeft }, () => 1 + rng.int(6));
+    if (hasScore(dice) && bestKeep(dice).points <= 400) return dice;
+  }
+  return null;
 }

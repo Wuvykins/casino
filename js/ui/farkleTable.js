@@ -3,6 +3,7 @@ import { h, clear, sleep, modal, toast } from './dom.js';
 import { chipStackEl, portraitEl, creditCardEl, askLeave, resultBanner, countTo } from './components.js';
 import { Game, scoreSelection, chooseKeep, shouldBank, bestKeep, TARGET, ENTRY } from '../core/farkle.js';
 import { makeRng } from '../core/rng.js';
+import { farkleSave } from '../core/luck.js';
 import { bank, fmt$ } from '../core/bank.js';
 import { assets } from '../core/assets.js';
 import { audio } from '../core/audio.js';
@@ -17,7 +18,7 @@ const ZONE = { x0: 26, x1: 64, y0: 46, y1: 62 };
 const fmtN = (n) => n.toLocaleString('en-US');
 
 export class FarkleTable {
-  constructor(root, table, buyIn, opponentIds, { onLeave }) {
+  constructor(root, table, buyIn, opponentIds, { onLeave, resume = null }) {
     this.root = root; this.table = table; this.onLeave = onLeave;
     this.rng = makeRng();
     this.opps = opponentIds.slice(0, 3).map((id) => characterById(id));
@@ -26,9 +27,18 @@ export class FarkleTable {
     this.oppStacks = Object.fromEntries(this.opps.map((c) => [c.id, table.maxBuy]));
     this.name = bank.state.playerName || 'You';
     this.games = 0; this.lastWinner = null;
-    bank.buyIn(buyIn, table.id);
-    bank.setAtTable({ tableId: table.id, stack: buyIn, opponents: this.opps.map((c) => c.id) });
+    this.resume = resume?.state || null;   // a game to pick back up at the start of the saved turn, used once by playGame
+    if (resume) { Object.assign(this.oppStacks, this.resume.oppStacks || {}); this.lastWinner = this.resume.lastWinner ?? null; this.games = this.resume.games || 0; }
+    else bank.buyIn(buyIn, table.id);
+    if (!resume) this.checkpoint(null);   // resuming: the save on disk is already this game — keep it until the next turn
     this.build();
+  }
+  // Saved at the start of every turn (scores, who's up, the final round) and after each game is paid. Closing the
+  // game mid-turn replays that turn from its first roll; the stakes are only settled when a game ends.
+  checkpoint(game) {
+    if (this.stopped) return;
+    const g = game && game.phase !== 'over' ? { scores: { ...game.scores }, onBoard: { ...game.onBoard }, current: game.current, finalRound: game.finalRound, closer: game.closer, pending: game.pending ? [...game.pending] : null, turnsTaken: { ...game.turnsTaken } } : null;
+    bank.setAtTable({ game: 'farkle', tableId: this.table.id, stack: this.stack, opponents: this.opps.map((c) => c.id), savedAt: Date.now(), state: { oppStacks: { ...this.oppStacks }, lastWinner: this.lastWinner, games: this.games, game: g } });
   }
   get speed() { return bank.state.settings.aiSpeed || 1; }
   wait(ms) { return sleep(ms / this.speed); }
@@ -184,7 +194,7 @@ export class FarkleTable {
   // ---------- main loop ----------
   async run() {
     this.say(`Welcome, ${this.name}. First to ${fmtN(TARGET)}; you need ${ENTRY} in one turn to get on the board.`);
-    for (const c of this.opps) if (this.talk(c.id, 'greet', {}, 0.6)) await this.wait(500);
+    if (!this.resume) for (const c of this.opps) if (this.talk(c.id, 'greet', {}, 0.6)) await this.wait(500);
     while (!this.stopped) {
       if (this.stack < this.table.stake) {
         const c = await this.bustModal();
@@ -199,11 +209,15 @@ export class FarkleTable {
   async playGame() {
     const players = [HUMAN, ...this.opps.map((c) => c.id)];
     // the winner of the last game rolls first; otherwise a random start
-    const first = this.lastWinner && players.includes(this.lastWinner) ? this.lastWinner : this.rng.pick(players);
+    const saved = this.resume?.game; this.resume = null;
+    const first = saved ? saved.current : this.lastWinner && players.includes(this.lastWinner) ? this.lastWinner : this.rng.pick(players);
     const game = new Game({ rng: this.rng, players, first });
-    this.game = game; this.games++;
+    game.luckyRoll = (g) => farkleSave(g, HUMAN, this.table.save, this.rng);   // luck: `save` of your farkles in 100 come up scoring instead
+    if (saved) { Object.assign(game.scores, saved.scores); Object.assign(game.onBoard, saved.onBoard); Object.assign(game.turnsTaken, saved.turnsTaken || {}); game.finalRound = !!saved.finalRound; game.closer = saved.closer; if (saved.pending) game.pending = new Set(saved.pending); }
+    else this.games++;
+    this.game = game;
     this.updateScores(game); this.renderKept(game); clear(this.trayEl); this.renderTurn(game);
-    this.say(`${fmt$(this.table.stake)} each in the pot. ${this.nameOf(first)} roll${first === HUMAN ? '' : 's'} first.`);
+    this.say(saved ? (first === HUMAN ? "Welcome back. You're up." : `Welcome back. ${this.nameOf(first)} is up.`) : `${fmt$(this.table.stake)} each in the pot. ${this.nameOf(first)} roll${first === HUMAN ? '' : 's'} first.`);
     await this.wait(600);
     while (game.phase !== 'over' && !this.stopped) {
       await this.playTurn(game);
@@ -213,6 +227,7 @@ export class FarkleTable {
   }
 
   async playTurn(game) {
+    this.checkpoint(game);   // closing the game from here replays this turn
     const id = game.current;
     this.setActing(id);
     this.renderKept(game); clear(this.trayEl); this.renderTurn(game);
@@ -325,7 +340,7 @@ export class FarkleTable {
     const lost = this.game.events.slice().reverse().find((e) => e.type === 'farkle' && e.playerId === id)?.lost || 0;
     await sleep(Math.max(500, 700 / this.speed));
     this.shout(id === HUMAN ? `FARKLE! ${lost ? `${fmtN(lost)} points gone.` : 'Nothing there.'}` : `FARKLE! ${this.nameOf(id)} loses ${lost ? fmtN(lost) + ' points' : 'the turn'}.`, 'farkle');
-    audio.play('lose', { volume: 0.5 });
+    audio.play('farkle', { volume: 0.75 });   // the sad trombone: Nic's wah-wah at 2.1× (2.3 s, fits the pause below)
     for (const el of this.trayEl.querySelectorAll('.die')) el.classList.add('dead');
     this.turnEl.classList.add('lost');
     if (id === HUMAN) { const o = this.opps; if (o.length) this.talk(this.rng.pick(o).id, 'tauntFarkle', {}, 0.4); }
@@ -366,7 +381,7 @@ export class FarkleTable {
     this.say(humanWon ? 'You win the game!' : `${this.nameOf(r.winner)} wins the game.`);
     if (humanWon) { for (const c of this.opps) this.talk(c.id, 'cribGameLose', {}, 0.5); } else this.talk(r.winner, 'cribGameWin', {}, 0.9);
     bank.recordHand({ won: humanWon, showdown: false, pot, net: humanWon ? amount : -amount, handName: null, handScore: 0 });
-    bank.setAtTable({ tableId: this.table.id, stack: this.stack, opponents: this.opps.map((c) => c.id) });
+    this.checkpoint(null);
     if (humanWon) { audio.play(this.opps.length > 1 ? 'bigwin' : 'win'); await this.wait(300); if (this.opps.length > 1) await this.winBanner(amount, true); else await resultBanner(this.el, { type: 'win', amount, caption: '\u2684   GAME WON   \u2684', hold: 2600 }); }
     else { audio.play('lose', { volume: 0.4 }); await this.wait(300); await resultBanner(this.el, { type: 'lose', amount: -amount, title: `${this.nameOf(r.winner)} wins`, caption: 'GAME OVER', hold: 2600 }); }
     const choice = await modal({

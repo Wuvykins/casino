@@ -82,6 +82,7 @@ export class Game {
   roll() {
     if (this.phase !== 'roll' && this.phase !== 'decide') throw new Error('cannot roll now');
     this.dice = Array.from({ length: this.diceLeft }, () => 1 + this.rng.int(6));
+    if (this.luckyRoll && !hasScore(this.dice)) this.dice = this.luckyRoll(this) || this.dice;   // the luck system may save a farkle
     this.emit('roll', { playerId: this.current, dice: this.dice.slice(), turnTotal: this.turnTotal });
     if (!hasScore(this.dice)) {
       this.emit('farkle', { playerId: this.current, lost: this.turnTotal });
