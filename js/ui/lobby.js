@@ -263,7 +263,7 @@ export function showSettings(root, ctx, opts = {}) {
           h('div', { class: 'modal-buttons split' },
             h('button', { class: 'btn exit-btn', onClick: async () => {
               audio.play('tap');
-              const ok = await modal({ title: 'Exit the casino?', body: atTable ? 'Your chips go back to the bank. Everything is saved.' : 'Everything is saved.', buttons: [{ label: 'Stay', kind: 'ghost', value: false }, { label: 'Exit Game', kind: 'primary', value: true }] });
+              const ok = await modal({ title: 'Exit the casino?', body: atTable ? (bank.state.tourney ? 'Your tournament is saved. It picks up right where you left off next time.' : 'Your chips go back to the bank. Everything is saved.') : 'Everything is saved.', buttons: [{ label: 'Stay', kind: 'ghost', value: false }, { label: 'Exit Game', kind: 'primary', value: true }] });
               if (ok) { close(); document.dispatchEvent(new Event('casino:exit')); }
             } }, icon('exit'), h('span', {}, 'Exit Game')),
             h('button', { class: 'btn primary', onClick: () => close() }, 'Done')),

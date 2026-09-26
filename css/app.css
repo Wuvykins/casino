@@ -942,3 +942,64 @@ label.check { font-family: Georgia, 'Times New Roman', serif; color: #eee5cc; }
 .champ-collect { margin-top: clamp(6px, 2vh, 12px); min-width: 46%; }
 @media (max-height: 460px) { .champ-plaque { top: 54%; padding-top: clamp(20px, 7vh, 30px); } .champ-trophy { transform: translate(-50%, -62%); } }
 .build-tag { text-align: center; font-size: 11px; letter-spacing: .12em; color: rgba(244,238,220,.45); margin-top: 8px; margin-bottom: -4px; }
+/* saved tournament (v163) */
+.table-tile.saved { border-color: #e6c36a; box-shadow: 0 0 0 1px rgba(230,195,106,.35) inset, 0 0 18px rgba(230,195,106,.25); }
+.table-tile.saved .tt-sub { color: #f0d27a; }
+.resume-offer .modal-body p { margin: 0 0 6px; }
+.resume-offer .resume-name { font: 700 clamp(20px, 5vh, 26px)/1.2 Georgia, 'Times New Roman', serif; color: #f0d27a; }
+.tourney-leave .modal-buttons { flex-wrap: wrap; }
+.tourney-leave .modal-buttons .btn.danger { margin-right: auto; }
+
+/* ============ motion (v163): one easing family, short and settled; everything off for reduced motion ============ */
+:root { --ease-out: cubic-bezier(.2, .8, .2, 1); --ease-spring: cubic-bezier(.2, 1.3, .35, 1); }
+/* a new screen fades up from the dark background; the old one is simply gone (no crossfade — nothing ghosts over it) */
+#app > .lobby, #app > .select-screen, #app > .table-screen { animation: screen-in .32s var(--ease-out) backwards; }
+@keyframes screen-in { from { opacity: 0; transform: scale(1.01); } }
+/* dialogs spring up a little and drop away quickly */
+.modal { opacity: 0; transform: translateY(12px) scale(.96); transition: transform .32s var(--ease-spring), opacity .18s ease-out; }
+.overlay.open .modal { opacity: 1; transform: none; }
+.overlay.closing .modal { opacity: 0; transform: scale(.98); transition-duration: .16s; }
+/* buttons press in, and brighten under a mouse */
+.btn, .act, .table-tile, .radio-btn, .settings-btn, .gear-btn, .note-btn { transition: transform .12s var(--ease-out), filter .15s, box-shadow .2s, background .15s; }
+.btn:not(:disabled):active, .radio-btn:active, .settings-btn:active { transform: scale(.96); filter: brightness(.94); }
+.act:not(:disabled):active { transform: translateY(1px) scale(.97); filter: brightness(.93); }
+.gear-btn:active, .note-btn:active { transform: scale(.92); }
+@media (hover: hover) {
+  .btn:not(:disabled):hover, .act:not(:disabled):hover, .radio-btn:hover, .settings-btn:hover { filter: brightness(1.08); }
+  .btn.primary:not(:disabled):hover { box-shadow: 0 0 16px rgba(240, 210, 122, .35); }
+  .table-tile:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(110,85,32,.35) inset, 0 8px 18px rgba(0,0,0,.45), 0 0 14px rgba(230,195,106,.18); }
+}
+/* table tiles arrive one after another */
+.select-screen .table-tile { animation: tile-in .36s var(--ease-out) backwards; }
+.select-screen .table-group .table-tile:nth-child(2) { animation-delay: .03s; } .select-screen .table-group .table-tile:nth-child(3) { animation-delay: .06s; }
+.select-screen .table-group .table-tile:nth-child(4) { animation-delay: .09s; } .select-screen .table-group .table-tile:nth-child(5) { animation-delay: .12s; }
+.select-screen .table-group .table-tile:nth-child(6) { animation-delay: .15s; }
+@keyframes tile-in { from { opacity: 0; transform: translateY(8px); } }
+/* dealt cards arrive from the dealer: a short toss with a little rotation that settles flat */
+.pcard.dealt { animation: deal-in .3s var(--ease-out) backwards; }
+@keyframes deal-in { from { opacity: 0; transform: translateY(-24px) rotate(-6deg) scale(.88); } 55% { opacity: 1; } }
+/* toasts settle in with the same spring as dialogs */
+.toast { transition: opacity .22s ease-out, transform .32s var(--ease-spring); }
+@media (prefers-reduced-motion: reduce) {
+  #app > *, .select-screen .table-tile, .pcard.dealt { animation: none !important; }
+  .modal, .toast, .btn, .act, .table-tile { transition: none !important; }
+}
+/* one-group rooms (blackjack, cribbage, farkle, slots): the tables fill the width in two columns instead of hugging the left */
+.table-groups.single { grid-template-columns: 1fr; }
+.table-groups.single .table-group { display: grid; grid-template-columns: 1fr 1fr; column-gap: 12px; align-content: start; }
+.table-groups.single .table-group h3 { grid-column: 1 / -1; }
+.table-groups.single .table-tile:only-of-type { grid-column: 1 / -1; justify-self: center; width: min(560px, 100%); }
+/* Settings on a landscape phone: labels beside their controls and the two small links on one line, so Exit/Done fit without scrolling */
+@media (max-height: 460px) {
+  .settings-modal { padding: 12px 16px; }
+  .settings-modal h2 { margin-bottom: 4px; }
+  .settings-modal .field { display: grid; grid-template-columns: 9.5em 1fr; align-items: center; column-gap: 14px; margin: 2px 0; }
+  .settings-modal .field > label { margin: 0; }
+  .settings-modal label.check { padding: 3px 0; }
+  .settings-modal .radio-link { display: inline-flex; margin: 4px 14px 2px 0; vertical-align: middle; }
+  .settings-modal details { display: inline-block; vertical-align: middle; }
+  .settings-modal details[open] { display: block; }
+  .settings-modal .modal-buttons { margin-top: 8px; }
+  .settings-modal .build-tag { margin-top: 4px; }
+}
+.settings-modal .field > label, .settings-modal summary { font-family: Georgia, 'Times New Roman', serif; color: #eee5cc; }

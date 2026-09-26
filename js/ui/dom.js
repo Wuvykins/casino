@@ -23,7 +23,10 @@ export function append(el, children) {
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Swapping the whole screen (#app) needs nothing special: the old screen goes at once and the new one fades up from the
+// dark background (screen-in, css). v163 crossfaded the two, which showed the old menus ghosting over the new screen.
 export function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); return el; }
+export const reducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 // Simple modal. Returns a promise resolving with whatever a button's onClick returns (via close(value)).
 export function modal({ title, body, buttons = [], className = '', dismissable = false }) {

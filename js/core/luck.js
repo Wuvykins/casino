@@ -11,9 +11,10 @@ import { evaluate, category } from './evaluator.js';
 import { preflopStrength } from './ai.js';
 
 export const LUCK = {
+  // hold'em: how often is set per table (`nudge`, hands per 100, in content/tables.js); these three set the MIX of kinds
   holdemValue: 0.08,    // per hand: you end up best, 1-2 opponents have a real hand to pay you with
   holdemFamily: 0.03,   // per hand: everyone has something, big pot, yours is the best
-  goodHoleCards: 0.12,  // per hand: your hole cards are re-drawn to something playable (no other fixing)
+  goodHoleCards: 0.14,  // per hand: your hole cards are re-drawn to something playable (no other fixing)
   bjDeal: 0.06,         // per round: your first two cards make 20 or 21
   bjHit: 0.15,          // per hit on 12-16: the next card makes 17-21
   bjDealerBust: 0.15,   // per dealer play while you're standing on 12-16: the dealer goes over
@@ -22,6 +23,18 @@ export const LUCK = {
 };
 
 // ---------- hold'em ----------
+// Each hold'em table sets its own `nudge`: how many hands in 100 get arranged for the human (see content/tables.js).
+// When a hand is nudged, which kind it is follows the mix in LUCK above (family pot / value hand / better hole cards,
+// 3 : 8 : 14 today) — change the mix there, the rate on the table. Returns 'family' | 'value' | 'hole', or null.
+export function holdemNudge(rng, per100) {
+  if (!(per100 > 0)) return null;
+  const roll = rng.next() * 100;
+  if (roll >= per100) return null;
+  const total = LUCK.holdemFamily + LUCK.holdemValue + LUCK.goodHoleCards;
+  const k = (roll / per100) * total;   // where in the mix this nudge falls
+  return k < LUCK.holdemFamily ? 'family' : k < LUCK.holdemFamily + LUCK.holdemValue ? 'value' : 'hole';
+}
+
 // order: player ids in dealing order (left of the button first). Returns a full 52-card deck arranged so
 // that Hand.start() deals this scenario (cards are popped from the END of the deck), or null.
 export function luckyHoldemDeck(order, humanId, flavor, rng, tries = 400) {

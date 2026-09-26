@@ -39,6 +39,9 @@ export const CHARACTERS = [
       winBig: ['Told you I had it.', 'That\'s the one.'],
       caughtBluff: ['Had to try it once.'],
       hurry: ['Take your time. Not that much time.'],
+      beSmart: ['Be smart.'],   // heads-up with you, betting, and his hand is going to win (holdemTable.maybeBeSmart)
+      brutal: ['That sucks.', 'Brutal.'],   // you bet big and lost at showdown (holdemTable.sympathy)
+      hateToSee: ['You hate to see it.'],   // same moment, when Freddy's at the table: Freddy answers 'You really do.'
     },
   },
   {
@@ -55,6 +58,7 @@ export const CHARACTERS = [
       tooMuchChecking: ['Too much checking.', 'Nobody wants it? I\'ll take it.', 'Y\'all are boring. Bet.', 'Somebody has to bet.'],
       playerWin: ['Enjoy it. It\'s a loan.', 'Lucky river, {player}.'],
       hurry: ['We\'re not getting younger, {player}.', 'Tick tock.'],
+      reallyDo: ['You really do.'],   // answering Nic's 'You hate to see it.'
     },
   },
   {

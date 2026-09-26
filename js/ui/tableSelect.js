@@ -21,16 +21,22 @@ export function renderTableSelect(root, opts) {
   for (const g of opts.groups) {
     const box = h('div', { class: 'table-group' }, g.label ? h('h3', {}, g.label) : null);
     for (const t of g.tables) {
-      const locked = t.tier > tier.id;
-      const cantAfford = !locked && s.bank < t.minBuy;
+      const saved = opts.saved?.(t);   // a saved tournament at this table: always open, whatever the bank says
+      const locked = !saved && t.tier > tier.id;
+      const cantAfford = !saved && !locked && s.bank < t.minBuy;
       box.append(h('button', {
-        class: 'table-tile' + (locked ? ' locked' : '') + (cantAfford ? ' poor' : ''),
+        class: 'table-tile' + (locked ? ' locked' : '') + (cantAfford ? ' poor' : '') + (saved ? ' saved' : ''),
         disabled: locked || cantAfford,
-        onClick: () => { audio.play('tap'); chooseBuyIn(root, t, opts); },
+        onClick: async () => {
+          audio.play('tap');
+          if (saved) return opts.onResume(t);
+          if (opts.beforeSit && !(await opts.beforeSit(t))) return;
+          chooseBuyIn(root, t, opts);
+        },
       },
         h('div', { class: 'tt-name' }, t.name),
-        h('div', { class: 'tt-sub' }, opts.describe(t)),
-        locked ? h('div', { class: 'tt-lock' }, `🔒 ${tierById(t.tier).name} card required`) : cantAfford ? h('div', { class: 'tt-lock' }, `Need ${fmt$(t.minBuy)} in the bank`) : h('div', { class: 'tt-go' }, 'Sit down ›'),
+        h('div', { class: 'tt-sub' }, saved ? opts.savedNote(t) : opts.describe(t)),
+        locked ? h('div', { class: 'tt-lock' }, `🔒 ${tierById(t.tier).name} card required`) : cantAfford ? h('div', { class: 'tt-lock' }, `Need ${fmt$(t.minBuy)} in the bank`) : h('div', { class: 'tt-go' }, saved ? 'Continue ›' : 'Sit down ›'),
       ));
     }
     list.append(box);

@@ -97,3 +97,19 @@ export function bestFive(cards) {
   }
   return bestSet;
 }
+
+// The winning hand's name, plus the kicker when that's what beat an equal-looking hand:
+// Q-9 vs Q-2 on 6-4-8-7-Q → "Pair of Qs, 9 kicker". rivals = the scores it beat. Plain describe() otherwise.
+const SHOWN = [1, 1, 2, 1, 1, 1, 2, 1, 1];   // how many of the five ranks describe() already names, per category
+export function describeVs(win, rivals = []) {
+  const name = describe(win);
+  const same = rivals.filter((r) => r < win && describe(r) === name);
+  if (!same.length) return name;
+  const rival = Math.max(...same);
+  const cat = win >> 20;
+  for (let i = SHOWN[cat]; i < 5; i++) {
+    const a = (win >> (16 - 4 * i)) & 0xf, b = (rival >> (16 - 4 * i)) & 0xf;
+    if (a !== b) return `${name}, ${RANK_LABEL[a]} kicker`;
+  }
+  return name;
+}

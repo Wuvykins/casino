@@ -1,11 +1,11 @@
 // The Hold'em table: seats, chips, action bar, hand loop, opponents' talk. Sits on top of core/poker.js.
 import { h, clear, sleep, modal, toast } from './dom.js';
-import { cardEl, chipStackEl, portraitEl, playerAvatarEl, creditCardEl, chooseDeckBack, askLeave, resultBanner } from './components.js';
+import { cardEl, chipStackEl, portraitEl, playerAvatarEl, creditCardEl, chooseDeckBack, askLeave, resultBanner, countTo } from './components.js';
 import { Hand } from '../core/poker.js';
 import { decide, updateMood, thinkTime, readsFromPersonas } from '../core/ai.js';
 import { evaluate, describe, category } from '../core/evaluator.js';
 import { makeRng } from '../core/rng.js';
-import { LUCK, luckyHoldemDeck, betterHoleCards } from '../core/luck.js';
+import { LUCK, luckyHoldemDeck, betterHoleCards, holdemNudge } from '../core/luck.js';
 import { bank, fmt$ } from '../core/bank.js';
 import { assets } from '../core/assets.js';
 import { audio } from '../core/audio.js';
@@ -63,7 +63,8 @@ const HUMAN = 'you';
 const TEST_CHAMPION = false;   // true = win one tournament hand and the ceremony fires (for testing the champion sequence)
 
 export class HoldemTable {
-  constructor(root, table, buyIn, opponentIds, { onLeave }) {
+  // resume: a saved tournament (bank.state.tourney) to pick back up instead of starting a new one — no entry fee is taken
+  constructor(root, table, buyIn, opponentIds, { onLeave, resume = null }) {
     this.root = root; this.table = table; this.onLeave = onLeave;
     this.rng = makeRng();
     chooseDeckBack(this.rng);
@@ -86,10 +87,36 @@ export class HoldemTable {
       const c = characterById(id);
       this.seats.push({ seat: seats[i], id, name: c.name, isHuman: false, stack: this.tourney ? table.chips : table.maxBuy, char: c, mood: { tilt: 0 }, out: false });
     });
-    bank.buyIn(this.tourney ? table.buyIn : buyIn, table.id);
+    this.resumed = !!(resume && this.tourney);
+    if (this.resumed) this.restoreTourney(resume);
+    else bank.buyIn(this.tourney ? table.buyIn : buyIn, table.id);
     bank.setAtTable({ tableId: table.id, stack: this.tourney ? 0 : buyIn, opponents: opponentIds });   // tournament chips aren't money: nothing to restore on a reload
     this.refreshReads();
     this.build();
+  }
+
+  // ---------- tournament save ----------
+  // Saved at the start of every hand, so closing the game mid-hand picks up by replaying that hand from the top with
+  // everyone's chips as they were. Cleared when the tournament ends or the player leaves it.
+  saveTourney() {
+    if (!this.tourney || this.stopped) return;
+    bank.setTourney({
+      tableId: this.table.id, savedAt: Date.now(),
+      handNo: this.handNo, button: this.button, level: this.level, levelBoost: this.levelBoost,
+      seats: this.seats.map((s) => ({ id: s.id, stack: s.stack, out: !!s.out, tilt: s.mood?.tilt || 0 })),
+      humanStats: this.humanStats,
+    });
+  }
+  restoreTourney(r) {
+    this.handNo = r.handNo || 0; this.button = r.button || 0; this.levelBoost = r.levelBoost || 0;
+    this.level = Math.min(TOURNEY_BLINDS.length - 1, r.level || 0);
+    [this.game.sb, this.game.bb] = TOURNEY_BLINDS[this.level];
+    for (const saved of r.seats || []) {
+      const s = this.seatById(saved.id); if (!s) continue;
+      s.stack = saved.stack; s.out = !!saved.out;
+      if (s.mood) s.mood.tilt = saved.tilt || 0;
+    }
+    if (r.humanStats) this.humanStats = { ...this.humanStats, ...r.humanStats };
   }
 
   // Everyone at the table knows everyone else's tendencies (they're friends and family, after all).
@@ -151,17 +178,24 @@ export class HoldemTable {
     this.gearBtn = h('button', { class: 'gear-btn', title: 'Settings', onClick: () => { audio.play('tap'); showSettings(this.root, {}, { atTable: true }); } }, icon('gear'));
     this.el.append(this.topbar, this.felt, this.handInfo, this.actionBar, this.nextBar, this.gearBtn, noteButton(this.root));
     this.root.append(this.el);
-    this.unsubBank = bank.onChange(() => { const b = this.topbar.querySelector('.bank-amt'); if (b) b.textContent = fmt$(bank.state.bank); });
+    this.unsubBank = bank.onChange(() => countTo(this.topbar.querySelector('.bank-amt'), bank.state.bank, fmt$));
   }
 
   seatById(id) { return this.seats.find((s) => s.id === id); }
 
   // ---------- main loop ----------
   async run() {
-    this.say(null, this.tourney ? `Welcome to the ${this.table.name}. ${fmtChips(this.table.chips)} chips each, blinds ${fmtChips(this.game.sb)}/${fmtChips(this.game.bb)} — last two standing get paid.` : `Welcome to ${this.table.name}. Blinds ${fmt$(this.table.sb)}/${fmt$(this.table.bb)}.`);
-    await this.wait(600);
-    for (const s of this.seats.slice(1)) if (this.talk(s, 'greet', {}, 0.5)) await this.wait(500);
-    await this.wait(600);
+    if (this.resumed) {
+      const left = this.seats.filter((x) => x.stack > 0).length;
+      this.say(null, `Welcome back. ${left} players left, blinds ${fmtChips(this.game.sb)}/${fmtChips(this.game.bb)}.`);
+      for (const s of this.seats) this.updateSeat(s);
+      await this.wait(1200);
+    } else this.say(null, this.tourney ? `Welcome to the ${this.table.name}. ${fmtChips(this.table.chips)} chips each, blinds ${fmtChips(this.game.sb)}/${fmtChips(this.game.bb)} — last two standing get paid.` : `Welcome to ${this.table.name}. Blinds ${fmt$(this.table.sb)}/${fmt$(this.table.bb)}.`);
+    if (!this.resumed) {
+      await this.wait(600);
+      for (const s of this.seats.slice(1)) if (this.talk(s, 'greet', {}, 0.5)) await this.wait(500);
+      await this.wait(600);
+    }
     while (!this.stopped) {
       await this.playHand();
       if (this.stopped) break;
@@ -197,6 +231,7 @@ export class HoldemTable {
         this.updateSeat(s);
       }
     }
+    this.saveTourney();   // tournament: closing the game from here on resumes at this hand
     const players = this.seats.filter((s) => s.stack > 0).map((s) => ({ id: s.id, name: s.name, stack: s.stack, seat: s.seat }));
     // move the button to the next occupied seat
     this.button = (this.button + 1) % players.length;
@@ -241,12 +276,9 @@ export class HoldemTable {
     if (!players.some((p) => p.id === HUMAN) || players.length < 2) return null;
     const n = players.length;
     const order = players.map((_, k) => players[(this.button + 1 + k) % n].id);
-    const scale = this.tourney ? (this.table.luck ?? 1) : 1;   // tournaments get less help the higher the table
-    if (scale <= 0) return null;
-    const r = this.rng.next() / scale;
-    if (r < LUCK.holdemFamily) return luckyHoldemDeck(order, HUMAN, 'family', this.rng);
-    if (r < LUCK.holdemFamily + LUCK.holdemValue) return luckyHoldemDeck(order, HUMAN, 'value', this.rng);
-    if (r < LUCK.holdemFamily + LUCK.holdemValue + LUCK.goodHoleCards) return betterHoleCards(order, HUMAN, this.rng);
+    const kind = holdemNudge(this.rng, this.table.nudge ?? 25);   // the table's own hands-per-100
+    if (kind === 'family' || kind === 'value') return luckyHoldemDeck(order, HUMAN, kind, this.rng);
+    if (kind === 'hole') return betterHoleCards(order, HUMAN, this.rng);
     return null;
   }
 
@@ -350,7 +382,7 @@ export class HoldemTable {
           const bigWin = humanGain >= this.game.bb * 25;
           audio.play(humanWon ? (bigWin ? 'bigwin' : 'win') : 'chips');
           const names = winners.map((id) => this.seatById(id).name).join(' & ');
-          this.say(null, ev.showdown ? `${names} win${winners.length > 1 ? '' : 's'} ${this.fmt(totalPot)} with ${ev.awards[0].hand}` : `${names} take${winners.length > 1 ? '' : 's'} ${this.fmt(totalPot)}`);
+          this.say(null, ev.showdown ? `${names} win${winners.length > 1 ? '' : 's'} ${this.fmt(totalPot)} with ${ev.awards[0].told || ev.awards[0].hand}` : `${names} take${winners.length > 1 ? '' : 's'} ${this.fmt(totalPot)}`);
           // chips slide from the pot to each winner
           await this.wait(350);
           for (const id of winners) {
@@ -367,7 +399,7 @@ export class HoldemTable {
             // you went to the river and came second: say so properly (the loss sound goes with the banner)
             await this.wait(400);
             audio.play('lose', { volume: 0.4 }); this.lossSoundPlayed = true;
-            await resultBanner(this.felt, { type: 'lose', amount: this.hand.result.net[HUMAN], title: `${names} win${winners.length > 1 ? '' : 's'}`, caption: ev.awards[0].hand ? ev.awards[0].hand.toUpperCase() : 'HAND COMPLETE' });
+            await resultBanner(this.felt, { type: 'lose', amount: this.hand.result.net[HUMAN], title: `${names} win${winners.length > 1 ? '' : 's'}`, caption: ev.awards[0].hand ? (ev.awards[0].told || ev.awards[0].hand).toUpperCase() : 'HAND COMPLETE' });
           } else {
             await this.wait(700);
           }
@@ -458,6 +490,7 @@ export class HoldemTable {
     else if (ev.action === 'call' && this.hand.street === 'preflop' && this.hand.currentBet <= this.game.bb) audio.play('call'); // just calling the blind
     else audio.play('raise'); // bet, raise, or calling a raise
     this.renderMoney();
+    if (!seat.isHuman && (ev.action === 'bet' || ev.action === 'raise') && this.maybeBeSmart(seat)) return;
     if (!seat.isHuman) {
       const trig = action.why === 'too much checking' ? 'tooMuchChecking' : p.allIn && ev.action !== 'fold' ? 'allin' : ev.action === 'bet' ? 'raise' : ev.action;
       const prob = trig === 'allin' ? 1 : trig === 'tooMuchChecking' ? 0.9 : trig === 'raise' ? 0.55 : trig === 'fold' ? 0.25 : 0.3;
@@ -469,7 +502,7 @@ export class HoldemTable {
     const hand = this.hand;
     for (const p of hand.players) {
       const E = this.seatEls[p.id]; if (!E) continue;
-      E.stackEl.textContent = this.fmt(p.stack);
+      countTo(E.stackEl, p.stack, this.fmt);
       if (E.betEl.querySelector('.shown')) continue; // revealed cards live here at showdown
       clear(E.betEl);
       if (p.bet > 0 && !final) E.betEl.append(chipStackEl(p.bet, { compact: true, maxChips: 8 }));
@@ -479,7 +512,7 @@ export class HoldemTable {
     if (collected > 0) this.potEl.append(chipStackEl(collected, { maxChips: 8, compact: true, label: false }));
     this.plaque.set(hand.pot);   // blinds + every bet count toward the total
   }
-  updateSeat(s) { const E = this.seatEls[s.id]; if (E) { E.stackEl.textContent = s.out ? 'OUT' : this.fmt(s.stack); E.seatEl.classList.toggle('sitting-out', s.stack <= 0); E.seatEl.classList.toggle('out', !!s.out); } }
+  updateSeat(s) { const E = this.seatEls[s.id]; if (E) { if (s.out) { cancelAnimationFrame(E.stackEl._countRaf); delete E.stackEl.dataset.v; E.stackEl.textContent = 'OUT'; } else countTo(E.stackEl, s.stack, this.fmt); E.seatEl.classList.toggle('sitting-out', s.stack <= 0); E.seatEl.classList.toggle('out', !!s.out); } }
   setTag(id, text, kind = '') { const E = this.seatEls[id]; if (!E) return; E.tag.textContent = text; E.tag.className = 'action-tag show ' + kind; }
   highlightActor(id) { for (const [k, E] of Object.entries(this.seatEls)) E.seatEl.classList.toggle('acting', k === id); }
   say(seat, text) { this.msgEl.textContent = text; }
@@ -497,6 +530,37 @@ export class HoldemTable {
     E.spokeAt = Date.now(); E.bubble.textContent = line.text || '…'; E.bubble.classList.add('show');
     clearTimeout(E.bubbleT); E.bubbleT = setTimeout(() => E.bubble.classList.remove('show'), 2600);
     return true;
+  }
+
+  // Nic's inside joke: heads-up against you, he bets or raises with the hand that's going to win, and half the time
+  // he tells you to be smart. Once per hand. Knowing the outcome is fine — it's the deck that decides, not him.
+  maybeBeSmart(seat) {
+    if (seat.char?.id !== 'nic' || this.saidBeSmart === this.hand) return false;
+    const live = this.hand.active();
+    if (live.length !== 2 || !live.some((x) => x.id === HUMAN)) return false;
+    const board = this.hand.finalBoard();
+    const nic = live.find((x) => x.id === seat.id), you = live.find((x) => x.id === HUMAN);
+    if (evaluate([...nic.cards, ...board]) <= evaluate([...you.cards, ...board])) return false;
+    if (!this.rng.chance(0.5)) return false;
+    if (!this.talk(seat, 'beSmart', {}, 1)) return false;
+    this.saidBeSmart = this.hand;
+    return true;
+  }
+
+  // You bet big and got beat at showdown: Nic feels for you ('That sucks.' / 'Brutal.'). With Freddy at the table too,
+  // half the time it's the double act instead — Nic: 'You hate to see it.'  Freddy: 'You really do.'
+  sympathy() {
+    const seated = (id) => this.seats.find((s) => s.char?.id === id && !s.out);
+    const nic = seated('nic'); if (!nic) return;
+    const freddy = seated('freddy');
+    const E = this.seatEls[nic.id];
+    const delay = Math.max(900, 2300 - (Date.now() - (E?.spokeAt || 0)));   // let him finish whatever he just said
+    setTimeout(() => {
+      if (this.stopped) return;
+      if (freddy && this.rng.chance(0.5)) {
+        if (this.talk(nic, 'hateToSee', {}, 1)) setTimeout(() => { if (!this.stopped) { const F = this.seatEls[freddy.id]; if (F) F.spokeAt = 0; this.talk(freddy, 'reallyDo', {}, 1); } }, 1700);
+      } else if (this.rng.chance(0.7)) this.talk(nic, 'brutal', {}, 1);
+    }, delay);
   }
 
   playHandInfo() {
@@ -608,6 +672,7 @@ export class HoldemTable {
       if (s) setTimeout(() => this.talk(s, 'playerWin', {}, 0.5), 900);
     }
     const humanFolded = !!hand.players.find((p) => p.id === HUMAN)?.folded;
+    if (res.showdown && !humanFolded && !humanWon && humanNet <= -25 * this.game.bb) this.sympathy();
     if (humanNet < 0 && !humanWon && !humanFolded && !this.lossSoundPlayed) audio.play('lose', { volume: 0.4 });   // folding isn't losing: no sound for blinds or bets you let go of (Nic)
     this.lossSoundPlayed = false;
     await this.wait(1600);
@@ -622,6 +687,7 @@ export class HoldemTable {
       if (human.stack <= 0 || alive.length === 1) {
         const place = human.stack > 0 ? 1 : alive.length + 1;   // busted: everyone still holding chips finished ahead of you
         this.placed = place; this.payout = this.table.prizes[place - 1] || 0;
+        bank.setTourney(null);   // decided: a restart now can't replay it
         if (place === 1) {   // the ceremony: victory fanfare, chip rain, an applauding guest and the prize plaque (it has its own Collect)
           await this.wait(500);
           await championship({ winner: human.name, prize: this.payout, players: this.seats.length, tableName: this.table.name });
@@ -677,6 +743,7 @@ export class HoldemTable {
 
   async requestLeave() {
     audio.play('tap');
+    if (this.tourney) return this.requestLeaveTourney();
     if (this.hand && !this.hand.finished) {
       const p = this.hand.players.find((x) => x.id === HUMAN);
       const inPot = p?.committed || 0;
@@ -694,6 +761,41 @@ export class HoldemTable {
       this.leaving = true;
     }
   }
+  // Tournament: the seat can be kept. Save & leave goes back to the lobby with the tournament saved (it resumes at the
+  // start of the current hand); Forfeit gives it up and the entry fee is gone.
+  async requestLeaveTourney() {
+    const choice = await modal({
+      title: 'Leave the tournament?', dismissable: true, className: 'tourney-leave',
+      body: (el) => el.append(
+        h('p', {}, 'Your seat is saved. Come back any time and pick up right where you left off.'),
+        this.hand && !this.hand.finished ? h('p', { class: 'muted small' }, 'The hand in progress starts over when you come back.') : null,
+      ),
+      buttons: [
+        { label: 'Forfeit', kind: 'danger', value: 'forfeit' },
+        { label: 'Keep playing', kind: 'ghost', value: 'stay' },
+        { label: 'Save & leave', kind: 'primary', value: 'save' },
+      ],
+    });
+    if (choice === 'save') return this.saveAndLeave();
+    if (choice !== 'forfeit') return;
+    const sure = await modal({
+      title: 'Give up your seat?', dismissable: true,
+      body: `The ${fmt$(this.table.buyIn)} entry fee won't come back.`,
+      buttons: [{ label: 'Keep my seat', kind: 'ghost', value: false }, { label: 'Forfeit', kind: 'danger', value: true }],
+    });
+    if (sure) this.leaveNow();
+  }
+  saveAndLeave() {
+    if (this.stopped) return;
+    clearTimeout(this.hurryT);
+    if (!bank.state.tourney) this.saveTourney();
+    this.stopped = true;
+    this.unsubBank?.();
+    if (this.pendingHuman) this.pendingHuman({ type: 'fold' });   // unblocks the hand loop; it sees `stopped` and does nothing
+    toast('Tournament saved. Pick it up from the Hold\'em room.', 3200);
+    this.onLeave({ stack: 0, saved: true });
+  }
+
   // Walk out mid-hand: whatever is in the pot is forfeited, the rest of the stack goes back to the bank.
   leaveNow() {
     clearTimeout(this.hurryT);
@@ -705,6 +807,7 @@ export class HoldemTable {
   async leave() {
     if (this.stopped) return;
     this.stopped = true;
+    if (this.tourney) bank.setTourney(null);   // finished or forfeited: nothing left to resume
     this.unsubBank?.();
     const stack = this.tourney ? this.payout : this.human.stack;   // tournament: only a prize comes back, the chips were never money
     const change = bank.cashOut(stack, this.table.id);

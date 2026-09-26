@@ -5,14 +5,14 @@ import { Hand } from '../js/core/poker.js';
 import { decide, updateMood, readsFromPersonas } from '../js/core/ai.js';
 import { CHARACTERS } from '../js/content/characters.js';
 import { makeRng } from '../js/core/rng.js';
-import { LUCK, luckyHoldemDeck, betterHoleCards } from '../js/core/luck.js';
+import { LUCK, luckyHoldemDeck, betterHoleCards, holdemNudge } from '../js/core/luck.js';
 import { TOURNEY_BLINDS, TOURNEY_LEVEL_HANDS, HOLDEM_TABLES } from '../js/content/tables.js';
 
 const N = +process.argv[2] || 2000, OPP = +process.argv[3] || 5, LEVEL = process.argv[4] || 'average';
-// 5th arg: a luck scale (0 = honest, 1 = cash-game luck) or a tournament id (sng-200 …) to use that table's own scale
+// 5th arg: hands nudged per 100 (0 = honest, 25 = cash tables) or a tournament id (sng-200 …) to use that table's own nudge
 const arg5 = process.argv[5];
 const TABLE = arg5 && isNaN(+arg5) ? HOLDEM_TABLES.find((t) => t.id === arg5) : null;
-const LUCKSCALE = TABLE ? (TABLE.luck ?? 1) : arg5 === undefined ? 1 : +arg5;
+const NUDGE = TABLE ? (TABLE.nudge ?? 25) : arg5 === undefined ? 25 : +arg5;
 const HUMAN = 'you', CHIPS = 1500;
 const HUMANS = {
   weak:    { skill: 0.25, tight: 0.3, aggro: 0.3, bluff: 0.1, tilt: 0.3 },      // a casual player who calls too much
@@ -42,10 +42,9 @@ for (let t = 0; t < N; t++) {
     button = (button + 1) % players.length; handNo++;
     // the luck system, exactly as the table applies it
     const n = players.length, order = players.map((_, k) => players[(button + 1 + k) % n].id);
-    const r = rng.next() / (LUCKSCALE || 1e-9); let deck = null;
-    if (LUCKSCALE > 0 && r < LUCK.holdemFamily) deck = luckyHoldemDeck(order, HUMAN, 'family', rng);
-    else if (LUCKSCALE > 0 && r < LUCK.holdemFamily + LUCK.holdemValue) deck = luckyHoldemDeck(order, HUMAN, 'value', rng);
-    else if (LUCKSCALE > 0 && r < LUCK.holdemFamily + LUCK.holdemValue + LUCK.goodHoleCards) deck = betterHoleCards(order, HUMAN, rng);
+    const kind = holdemNudge(rng, NUDGE); let deck = null;
+    if (kind === 'family' || kind === 'value') deck = luckyHoldemDeck(order, HUMAN, kind, rng);
+    else if (kind === 'hole') deck = betterHoleCards(order, HUMAN, rng);
     if (deck) luckyHands++;
     const hand = new Hand({ table: game, players, button, rng, deck });
     hand.start();
@@ -57,7 +56,7 @@ for (let t = 0; t < N; t++) {
   places[humanPlace] = (places[humanPlace] || 0) + 1;
 }
 const pct = (k) => ((places[k] || 0) / N * 100).toFixed(1) + '%';
-console.log(`${N} tournaments, you (${LEVEL}) vs ${OPP} of the family, luck ×${LUCKSCALE}; ${(handsTotal / N).toFixed(0)} hands per tournament; luck touched ${(luckyHands / handsTotal * 100).toFixed(0)}% of hands`);
+console.log(`${N} tournaments, you (${LEVEL}) vs ${OPP} of the family, nudge ${NUDGE} in 100; ${(handsTotal / N).toFixed(0)} hands per tournament; luck touched ${(luckyHands / handsTotal * 100).toFixed(0)}% of hands`);
 console.log(`1st ${pct(1)}   2nd ${pct(2)}   paid (1st or 2nd) ${(((places[1] || 0) + (places[2] || 0)) / N * 100).toFixed(1)}%   fair share of 1st would be ${(100 / (OPP + 1)).toFixed(1)}%`);
 const T = TABLE || HOLDEM_TABLES.find((t) => t.id === 'sng-200');
 const ev = ((places[1] || 0) * T.prizes[0] + (places[2] || 0) * T.prizes[1]) / N - T.buyIn;

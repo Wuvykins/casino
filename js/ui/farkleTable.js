@@ -1,6 +1,6 @@
 // The farkle table: one to three of the family across from you, six big dice in the middle.
 import { h, clear, sleep, modal, toast } from './dom.js';
-import { chipStackEl, portraitEl, creditCardEl, askLeave, resultBanner } from './components.js';
+import { chipStackEl, portraitEl, creditCardEl, askLeave, resultBanner, countTo } from './components.js';
 import { Game, scoreSelection, chooseKeep, shouldBank, bestKeep, TARGET, ENTRY } from '../core/farkle.js';
 import { makeRng } from '../core/rng.js';
 import { bank, fmt$ } from '../core/bank.js';
@@ -99,7 +99,7 @@ export class FarkleTable {
     for (const p of game.players) { const el = this.seatEls[p].scoreEl; el.textContent = fmtN(game.scores[p]); el.dataset.note = game.onBoard[p] ? '' : 'not on board'; }
   }
   updateStacks() {
-    this.youPlate.lastChild.textContent = fmt$(this.stack);
+    countTo(this.youPlate.lastChild, this.stack, fmt$);
     for (const c of this.opps) this.seatEls[c.id].plate.lastChild.textContent = fmt$(this.oppStacks[c.id]);
   }
   showButtons(...btns) { clear(this.actionBar); this.actionBar.classList.remove('hidden'); this.actionBar.append(...btns.filter(Boolean)); }

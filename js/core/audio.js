@@ -4,7 +4,7 @@
 import { assets, probeAudio } from './assets.js';
 import { bank } from './bank.js';
 
-export const SFX = ['tap', 'chip', 'chips', 'deal', 'flip', 'check', 'call', 'raise', 'fold', 'win', 'bigwin', 'lose', 'allin', 'tierup', 'tierdown', 'bailout', 'shuffle', 'yourturn', 'dice', 'slotspin', 'slotreels', 'slotwin', 'slotmiss', 'slotclunk', 'slotsmall', 'slotstop', 'slotteacher', 'slotjackpot', 'victory', 'clap', 'crib1', 'crib2', 'count'];
+export const SFX = ['tap', 'chip', 'chips', 'deal', 'flip', 'check', 'call', 'raise', 'fold', 'win', 'bigwin', 'lose', 'allin', 'tierup', 'tierdown', 'bailout', 'shuffle', 'yourturn', 'dice', 'slotspin', 'slotreels', 'slotsmall', 'slotstop', 'slotteacher', 'slotjackpot', 'victory', 'clap', 'crib1', 'crib2', 'count'];
 
 // effects that reuse another effect's recording when they have no file of their own (Nic, v132)
 const ALIAS = { chips: 'allin', flip: 'deal', tierdown: 'lose' };
@@ -349,12 +349,9 @@ const synth = {
   yourturn: (c) => synth.tap(c),
   dice: (c) => { for (let i = 0; i < 6; i++) noise(c, { t: 0.04, vol: 0.12, hp: 1200, at: i * 0.06 + Math.random() * 0.02 }); },
   slotspin: (c) => { for (let i = 0; i < 24; i++) tone(c, { f: 500 + (i % 3) * 40, t: 0.03, type: 'square', vol: 0.04, at: 0.9 + i * 0.12 }); },
-  slotwin: (c) => [523, 659, 784, 1047].forEach((f, i) => tone(c, { f, t: 0.18, at: 3.9 + i * 0.1, vol: 0.12 })),
-  slotmiss: (c) => tone(c, { f: 200, t: 0.2, type: 'triangle', vol: 0.06, at: 3.9 }),
   slotstop: (c) => synth.tap(c),
   slotreels: () => {},
   slotsmall: (c) => synth.chips(c),
-  slotclunk: (c) => tone(c, { f: 200, t: 0.2, type: 'triangle', vol: 0.06 }),
   slotjackpot: (c) => [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(c, { f, t: 0.25, at: i * 0.12, vol: 0.14 })),
 };
 // the placeholder recipes, exported so tools/render_synth.mjs can bounce them to files for listening

@@ -141,3 +141,20 @@ export function resultBanner(container, { type = 'win', amount = 0, title, capti
     setTimeout(() => { el.remove(); resolve(); }, hold);
   });
 }
+
+// Money that changes rolls to its new value (about half a second, easing out) instead of snapping — a stack growing
+// after a pot, the bank after a cash-out. First write, reduced motion and non-numbers just set the text.
+export function countTo(el, value, format) {
+  if (!el) return;
+  const from = Number(el.dataset.v);
+  el.dataset.v = String(value);
+  cancelAnimationFrame(el._countRaf);
+  if (!Number.isFinite(from) || from === value || !Number.isFinite(value) || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { el.textContent = format(value); return; }
+  const t0 = performance.now(), dur = Math.min(700, 300 + Math.abs(value - from) / 50);
+  const step = (now) => {
+    const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+    el.textContent = format(Math.round(from + (value - from) * e));
+    if (k < 1) el._countRaf = requestAnimationFrame(step);
+  };
+  el._countRaf = requestAnimationFrame(step);
+}

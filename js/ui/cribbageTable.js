@@ -1,6 +1,6 @@
 // The cribbage table: one opponent across from you, a board along the top, your cards big along the bottom.
 import { h, clear, sleep, modal, toast } from './dom.js';
-import { cardEl, chipStackEl, portraitEl, creditCardEl, chooseDeckBack, askLeave, resultBanner } from './components.js';
+import { cardEl, chipStackEl, portraitEl, creditCardEl, chooseDeckBack, askLeave, resultBanner, countTo } from './components.js';
 import { Game, scorePlay, chooseDiscard, choosePlay, pegValue, TARGET } from '../core/cribbage.js';
 import { RANK_LABEL, SUIT_GLYPH, cardKey, sameCard } from '../core/cards.js';
 import { makeRng } from '../core/rng.js';
@@ -235,7 +235,7 @@ export class CribbageTable {
     this.spokeAt = Date.now(); this.bubble.textContent = line.text; this.bubble.classList.add('show');
     clearTimeout(this.bubbleT); this.bubbleT = setTimeout(() => this.bubble.classList.remove('show'), 2600);
   }
-  updateStacks() { this.youPlate.lastChild.textContent = fmt$(this.stack); this.oppPlate.lastChild.textContent = fmt$(this.oppStack); }
+  updateStacks() { countTo(this.youPlate.lastChild, this.stack, fmt$); countTo(this.oppPlate.lastChild, this.oppStack, fmt$); }
   setActing(id) {
     this.oppEl.classList.toggle('acting', id === this.opp);
     this.youPlate.classList.toggle('acting', id === HUMAN);
@@ -294,13 +294,13 @@ export class CribbageTable {
     this.updatePegs(game);
     this.stakeNote(game);
     await this.wait(400);
-    this.say(`${this.nameOf(dealer)} deal${dealer === HUMAN ? '' : 's'} first.`);
+    this.say(`${this.boardName(dealer)} deal${dealer === HUMAN ? '' : 's'} first.`);
     await this.waitDeal();
     while (game.phase !== 'over' && !this.stopped) {
       await this.playHand(game);
       if (this.stopped || game.phase === 'over') break;
       if (this.leaving) this.say('Finishing the game, then we go.');
-      else this.say(`${this.nameOf(game.pone)} deal${game.pone === HUMAN ? '' : 's'} next.`);   // the count is done; the deal passes to the pone
+      else this.say(`${this.boardName(game.pone)} deal${game.pone === HUMAN ? '' : 's'} next.`);   // the count is done; the deal passes to the pone
       await this.waitDeal();
     }
     if (this.stopped) return;
@@ -361,7 +361,7 @@ export class CribbageTable {
         case 'cut': {
           this.renderDeck(game);
           audio.play('flip');
-          this.say(`${this.nameOf(game.pone)} cut${game.pone === HUMAN ? '' : 's'} the ${cardName(ev.card)}.`);
+          this.say(`${this.boardName(game.pone)} cut${game.pone === HUMAN ? '' : 's'} the ${cardName(ev.card)}.`);
           await this.wait(600);
           break;
         }
@@ -654,8 +654,9 @@ export class CribbageTable {
     // between games (or before the first deal) we can go right away
     if (!this.game || this.game.phase === 'over' || this.game.phase === 'new') {
       this.leaving = true;
-      const btn = this.actionBar.querySelector('button');
-      if (btn && /Deal/.test(btn.textContent)) { this.hideButtons(); this.leave(); }
+      const mid = this.felt.querySelector('.cb-deal-mid');   // the Deal button lives mid-felt now (v104), not in the action bar
+      const btn = mid || this.actionBar.querySelector('button');
+      if (btn && /Deal/.test(btn.textContent)) { if (mid) { mid.remove(); this.el.classList.remove('deal-ready'); } else this.hideButtons(); this.leave(); }
       return;
     }
     const choice = await askLeave({

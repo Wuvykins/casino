@@ -13,7 +13,7 @@
 // players = [{ id, name, stack, seat }] in clockwise seat order (only players dealt in)
 
 import { freshDeck, shuffle } from './cards.js';
-import { evaluate, describe, bestFive } from './evaluator.js';
+import { evaluate, describe, bestFive, describeVs } from './evaluator.js';
 
 export const STREETS = ['preflop', 'flop', 'turn', 'river'];
 const LIMIT_CAP = 4; // bet + 3 raises per street (no cap when heads-up)
@@ -286,10 +286,13 @@ export class Hand {
       winners.sort((a, b) => this.relPos(a) - this.relPos(b));
       const share = Math.floor(pot.amount / winners.length);
       let odd = pot.amount - share * winners.length;
+      // the name to announce: with the kicker when it's what beat an equal-looking hand (a split pot never needs one)
+      const beaten = pot.eligible.filter((id) => !winners.includes(id)).map((id) => scores[id]);
+      const told = winners.length === 1 ? describeVs(best, beaten) : describe(best);
       for (const id of winners) {
         const amt = share + (odd > 0 ? 1 : 0); if (odd > 0) odd--;
         this.byId(id).stack += amt;
-        awards.push({ playerId: id, amount: amt, potIndex, hand: describe(best) });
+        awards.push({ playerId: id, amount: amt, potIndex, hand: describe(best), told });
       }
     });
     this.emit('showdown', { revealed, pots });
@@ -310,6 +313,13 @@ export class Hand {
   }
 
   // ---------- read-only views for AI/UI ----------
+  // The five board cards this hand will end with, read from the deck without dealing (burn, flop, burn, turn, burn, river).
+  finalBoard() {
+    const d = this.deck.slice(), b = this.board.slice();
+    if (b.length === 0) { d.pop(); b.push(d.pop(), d.pop(), d.pop()); }
+    while (b.length < 5) { d.pop(); b.push(d.pop()); }
+    return b;
+  }
   activeOpponents(p) { return this.active().filter((q) => q.id !== p.id).length; }
   positionOf(p) { // 0 = first to act preflop … n-1 = big blind (as a fraction of table)
     const order = (p.idx - this.bbIdx() - 1 + this.n) % this.n; // 0 = UTG

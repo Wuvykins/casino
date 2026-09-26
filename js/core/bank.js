@@ -14,6 +14,7 @@ const defaults = () => ({
   stats: { handsPlayed: 0, handsWon: 0, showdownsWon: 0, biggestPot: 0, lifetimeNet: 0, bestHand: '', bestHandScore: 0, tierHistory: [] },
   settings: { sound: true, voices: true, autoDeal: true, aiSpeed: 1, showTips: true },
   atTable: null,      // { tableId, stack, opponents:[ids] } snapshot so a reload doesn't lose chips
+  tourney: null,      // a hold'em tournament in progress, saved before every hand so it can be resumed (see HoldemTable.saveTourney)
 });
 
 export const bank = {
@@ -91,6 +92,7 @@ export const bank = {
   },
 
   setAtTable(snapshot) { this.state.atTable = snapshot; this.save(); },
+  setTourney(snapshot) { this.state.tourney = snapshot; this.save(); },
   setName(name) { this.state.playerName = name.trim().slice(0, 18); this.save(); },
   setSetting(k, v) { this.state.settings[k] = v; this.save(); },
 

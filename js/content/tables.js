@@ -2,19 +2,19 @@
 // gets the same stack of tournament chips; blinds rise every few hands; bust and you're out; first and second are
 // paid from the prize pool: 4× the entry for first, 2× for second — enough to be worth it, not enough to jump a whole card tier in one go (Nic: 'I don't want to pass up cards'). `tier` is the minimum card tier needed to sit down.
 export const HOLDEM_TABLES = [
-  { id: 'nl-1-2',     mode: 'nolimit', name: 'No-Limit $1/$2',        sb: 1,   bb: 2,    minBuy: 50,    maxBuy: 200,    tier: 1 },
-  { id: 'nl-5-10',    mode: 'nolimit', name: 'No-Limit $5/$10',       sb: 5,   bb: 10,   minBuy: 300,   maxBuy: 1000,   tier: 2 },
-  { id: 'nl-25-50',   mode: 'nolimit', name: 'No-Limit $25/$50',      sb: 25,  bb: 50,   minBuy: 1500,  maxBuy: 5000,   tier: 3 },
-  { id: 'nl-100-200', mode: 'nolimit', name: 'No-Limit $100/$200',    sb: 100, bb: 200,  minBuy: 5000,  maxBuy: 20000,  tier: 4 },
-  { id: 'nl-500-1000',mode: 'nolimit', name: 'High Roller $500/$1000',sb: 500, bb: 1000, minBuy: 25000, maxBuy: 100000, tier: 5 },
-  // tournaments: minBuy/maxBuy are both the entry fee (the lobby uses them to say what you need in the bank). `luck` scales
-  // the hold'em luck system for that tournament (1 = the cash-game amount, 0 = an honest deal): the higher the table, the
-  // harder it gets — measured with tests/sng.sim.mjs.
-  { id: 'sng-200',    mode: 'tourney', name: 'The Open',         buyIn: 200,    prizes: [800, 400],       chips: 1500, luck: 0.35, minBuy: 200,    maxBuy: 200,    tier: 1 },
-  { id: 'sng-1000',   mode: 'tourney', name: 'The Classic',       buyIn: 1000,   prizes: [4000, 2000],      chips: 1500, luck: 0.25, minBuy: 1000,   maxBuy: 1000,   tier: 2 },
-  { id: 'sng-5000',   mode: 'tourney', name: 'The Major',       buyIn: 5000,   prizes: [20000, 10000],     chips: 1500, luck: 0.15, minBuy: 5000,   maxBuy: 5000,   tier: 3 },
-  { id: 'sng-20000',  mode: 'tourney', name: 'High Roller',      buyIn: 20000,  prizes: [80000, 40000],   chips: 1500, luck: 0.08, minBuy: 20000,  maxBuy: 20000,  tier: 4 },
-  { id: 'sng-100000', mode: 'tourney', name: 'Championship', buyIn: 100000, prizes: [400000, 200000],  chips: 1500, luck: 0, minBuy: 100000, maxBuy: 100000, tier: 5 },
+  { id: 'nl-1-2',     mode: 'nolimit', name: 'No-Limit $1/$2',        sb: 1,   bb: 2,    minBuy: 50,    maxBuy: 200,    tier: 1, nudge: 25 },
+  { id: 'nl-5-10',    mode: 'nolimit', name: 'No-Limit $5/$10',       sb: 5,   bb: 10,   minBuy: 300,   maxBuy: 1000,   tier: 2, nudge: 25 },
+  { id: 'nl-25-50',   mode: 'nolimit', name: 'No-Limit $25/$50',      sb: 25,  bb: 50,   minBuy: 1500,  maxBuy: 5000,   tier: 3, nudge: 25 },
+  { id: 'nl-100-200', mode: 'nolimit', name: 'No-Limit $100/$200',    sb: 100, bb: 200,  minBuy: 5000,  maxBuy: 20000,  tier: 4, nudge: 25 },
+  { id: 'nl-500-1000',mode: 'nolimit', name: 'High Roller $500/$1000',sb: 500, bb: 1000, minBuy: 25000, maxBuy: 100000, tier: 5, nudge: 25 },
+  // tournaments: minBuy/maxBuy are both the entry fee (the lobby uses them to say what you need in the bank).
+  // `nudge` (every hold'em table): how many hands in 100 are dealt in your favour (core/luck.js holdemNudge). 0 = an honest
+  // deal. Cash tables 25 (1 in 4); tournaments get harder as they go up — measured with tests/sng.sim.mjs.
+  { id: 'sng-200',    mode: 'tourney', name: 'The Open',         buyIn: 200,    prizes: [800, 400],       chips: 1500, nudge: 25, minBuy: 200,    maxBuy: 200,    tier: 1 },
+  { id: 'sng-1000',   mode: 'tourney', name: 'The Classic',       buyIn: 1000,   prizes: [4000, 2000],      chips: 1500, nudge: 20, minBuy: 1000,   maxBuy: 1000,   tier: 2 },
+  { id: 'sng-5000',   mode: 'tourney', name: 'The Major',       buyIn: 5000,   prizes: [20000, 10000],     chips: 1500, nudge: 15, minBuy: 5000,   maxBuy: 5000,   tier: 3 },
+  { id: 'sng-20000',  mode: 'tourney', name: 'High Roller',      buyIn: 20000,  prizes: [80000, 40000],   chips: 1500, nudge: 10, minBuy: 20000,  maxBuy: 20000,  tier: 4 },
+  { id: 'sng-100000', mode: 'tourney', name: 'Championship', buyIn: 100000, prizes: [400000, 200000],  chips: 1500, nudge: 5, minBuy: 100000, maxBuy: 100000, tier: 5 },
 ];
 // tournament blind schedule (tournament chips), and how many hands each level lasts
 export const TOURNEY_BLINDS = [[10, 20], [15, 30], [25, 50], [50, 100], [75, 150], [100, 200], [150, 300], [200, 400], [300, 600], [400, 800], [500, 1000], [750, 1500], [1000, 2000], [1500, 3000], [2000, 4000]];

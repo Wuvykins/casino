@@ -1,6 +1,6 @@
 // The blackjack table: dealer up top, you in the middle seat, up to two of the family beside you.
 import { h, clear, sleep, modal, toast } from './dom.js';
-import { cardEl, chipStackEl, portraitEl, creditCardEl, chooseDeckBack, CHIP_DENOMS, askLeave, resultBanner } from './components.js';
+import { cardEl, chipStackEl, portraitEl, creditCardEl, chooseDeckBack, CHIP_DENOMS, askLeave, resultBanner, countTo } from './components.js';
 import { Shoe, Round, handValue, isBlackjack, aiDecide, cardValue } from '../core/blackjack.js';
 import { makeRng } from '../core/rng.js';
 import { LUCK, bjLuckyDeal, bjLuckyHit, bjDealerBusts } from '../core/luck.js';
@@ -125,7 +125,7 @@ export class BlackjackTable {
     clearTimeout(E.bubbleT); E.bubbleT = setTimeout(() => E.bubble.classList.remove('show'), 2600);
     return true;
   }
-  updateStack(s) { this.seatEls[s.id].stackEl.textContent = fmt$(s.stack); }
+  updateStack(s) { countTo(this.seatEls[s.id].stackEl, s.stack, fmt$); }
 
   // ---------- main loop ----------
   async run() {

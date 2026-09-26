@@ -1,10 +1,11 @@
 // App entry: boots the save, probes art, routes between screens.
-import { h, $, clear } from './ui/dom.js';
+import { h, $, clear, modal } from './ui/dom.js';
 import { bank } from './core/bank.js';
 import { assets } from './core/assets.js';
 import { audio, music } from './core/audio.js';
 import { renderLobby, askName } from './ui/lobby.js';
-import { renderHoldemSelect } from './ui/holdemSelect.js';
+import { renderHoldemSelect, savedTourneyNote } from './ui/holdemSelect.js';
+import { tableById } from './content/tables.js';
 import { HoldemTable } from './ui/holdemTable.js';
 import { renderBlackjackSelect } from './ui/blackjackSelect.js';
 import { BlackjackTable } from './ui/blackjackTable.js';
@@ -32,7 +33,34 @@ function goHoldemSelect() {
       current = new HoldemTable(root, table, buyIn, opponents, { onLeave: goLobby });
       current.run().catch((err) => { console.error(err); goLobby(); });
     },
+    onResume: resumeTourney,
   });
+}
+
+// Pick a saved tournament back up (bank.state.tourney, written before every hand).
+function resumeTourney(snap) {
+  const table = snap && tableById(snap.tableId);
+  if (!table) { bank.setTourney(null); return goLobby(); }
+  music.duck(true);
+  const opponents = snap.seats.slice(1).map((s) => s.id);
+  current = new HoldemTable(root, table, 0, opponents, { onLeave: goLobby, resume: snap });
+  current.run().catch((err) => { console.error(err); goLobby(); });
+}
+
+// On launch: a tournament was left mid-way (closed, phone put away, or Save & leave) — offer to jump straight back in.
+async function offerResume() {
+  const snap = bank.state.tourney;
+  const table = snap && tableById(snap.tableId);
+  if (!table) return;
+  const go = await modal({
+    title: 'Your tournament is waiting', className: 'resume-offer', dismissable: true,
+    body: (el) => el.append(
+      h('p', { class: 'resume-name' }, table.name),
+      h('p', { class: 'muted' }, savedTourneyNote(snap) + '.'),
+    ),
+    buttons: [{ label: 'Later', kind: 'ghost', value: false }, { label: 'Continue', kind: 'primary', value: true }],
+  });
+  if (go) resumeTourney(snap);
 }
 
 function goBlackjackSelect() {
@@ -127,6 +155,7 @@ async function boot() {
   if (splash) { splash.classList.add('out'); setTimeout(() => splash.remove(), 600); }
   if (!bank.state.playerName) await askName();
   goLobby();
+  offerResume();
 }
 
 // Landscape only. Show a rotate prompt in portrait.
