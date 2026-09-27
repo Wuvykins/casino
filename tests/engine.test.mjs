@@ -203,4 +203,45 @@ test('fuzz: random legal play conserves chips (NL + limit, 2–9 players)', () =
   assert.ok(showdowns > 500 && sidePotHands > 200);
 });
 
+
+// Nic's screenshots (v176): a short all-in against a bigger stack was announced as a split — the big stack's uncalled
+// chips coming back were counted as "winning" a pot. Heads-up, button p0 = SB; deal pops p1, p0, p1, p0 from the end.
+const rigged = (holes, board) => {   // holes: [p0, p1] two cards each; board: 5 cards
+  const [a, b] = holes.map(parseCards), bd = parseCards(board);
+  const used = [...a, ...b, ...bd].map((c) => c.r + '-' + c.s);
+  const rest = freshDeck().filter((c) => !used.includes(c.r + '-' + c.s));
+  // popped order: p1, p0, p1, p0, burn, flop×3, burn, turn, burn, river
+  const seq = [b[0], a[0], b[1], a[1], rest[0], bd[0], bd[1], bd[2], rest[1], bd[3], rest[2], bd[4]];
+  return [...rest.slice(3), ...seq.reverse()];
+};
+test('the bigger stack getting its uncalled chips back is a refund, not a split (full house vs two pair)', () => {
+  const h = new Hand({ table: table(), players: mk([5000, 600]), button: 0, rng: makeRng(9), deck: rigged(['Qc Qd', 'Ah Kh'], '3s Qs Kd 3c 7d') });
+  h.start();
+  h.act(h.actor.id, { type: 'allin' }); h.act(h.actor.id, { type: 'call' });
+  assert.ok(h.finished);
+  const wins = h.result.awards.filter((a) => !a.refund);
+  assert.deepEqual([...new Set(wins.map((a) => a.playerId))], ['p0'], 'only the full house wins');
+  assert.equal(h.result.stacks.p1, 0);
+  assert.equal(h.result.stacks.p0, 5600);
+  assert.ok(h.result.awards.some((a) => a.refund && a.playerId === 'p0' && a.amount === 4400), 'the 4,400 nobody called comes back as a refund');
+});
+test('short stack wins the main pot; the big stack only gets its own chips back (pair of aces vs ace high)', () => {
+  const h = new Hand({ table: table(), players: mk([6000, 700]), button: 0, rng: makeRng(10), deck: rigged(['Td 5h', '8h Ah'], 'Jh Qc 2c Ad 3s') });
+  h.start();
+  h.act(h.actor.id, { type: 'allin' }); h.act(h.actor.id, { type: 'call' });
+  const wins = h.result.awards.filter((a) => !a.refund);
+  assert.deepEqual([...new Set(wins.map((a) => a.playerId))], ['p1'], 'pair of aces wins');
+  assert.equal(h.result.stacks.p1, 1400);
+  assert.ok(!h.result.awards.some((a) => a.refund && a.playerId === 'p1'));
+});
+test('a side pot a folded player paid into is a real win, not a refund', () => {
+  // p0 short all-in; p1 and p2 build a side pot; p2 folds on the flop, so p1 wins p2's side-pot chips
+  const h = new Hand({ table: table(), players: mk([50, 400, 400]), button: 0, rng: makeRng(11) });
+  h.start();
+  h.act('p0', { type: 'allin' }); h.act('p1', { type: 'raise', amount: 150 }); h.act('p2', { type: 'call' });
+  h.act('p1', { type: 'raise', amount: 100 }); h.act('p2', { type: 'fold' });
+  const side = h.result.awards.filter((a) => a.playerId === 'p1' && a.potIndex > 0);
+  assert.ok(side.some((a) => !a.refund && a.amount === 200), 'the 200 both put in above the all-in is won: ' + JSON.stringify(side));
+  assert.ok(side.some((a) => a.refund && a.amount === 100), 'p1\'s uncalled 100 is a refund: ' + JSON.stringify(side));
+});
 console.log(`\n${passed} tests passed`);

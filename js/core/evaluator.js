@@ -64,7 +64,7 @@ export function describe(score) {
   const k = [];
   for (let i = 0; i < 5; i++) k.push((score >> (16 - 4 * i)) & 0xf);
   const L = (r) => RANK_LABEL[r];
-  const plural = (r) => (r === 6 ? 'Sixes' : L(r) + 's');
+  const plural = (r) => L(r) + 's';   // 7s, 6s, As — one style (was 'Sixes', which read oddly next to '7s')
   switch (cat) {
     case 8: return k[0] === 14 ? 'Royal Flush' : `Straight Flush, ${L(k[0])} high`;
     case 7: return `Four ${plural(k[0])}`;

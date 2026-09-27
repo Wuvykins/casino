@@ -1,4 +1,5 @@
 // The blackjack table: dealer up top, you in the middle seat, up to two of the family beside you.
+import { wireHurry } from './hurry.js';
 import { h, clear, sleep, modal, toast } from './dom.js';
 import { cardEl, chipStackEl, portraitEl, creditCardEl, chooseDeckBack, CHIP_DENOMS, askLeave, resultBanner, countTo } from './components.js';
 import { Shoe, Round, handValue, isBlackjack, aiDecide, cardValue } from '../core/blackjack.js';
@@ -44,6 +45,7 @@ export class BlackjackTable {
   constructor(root, table, buyIn, companionIds, { onLeave, resume = null }) {
     this.root = root; this.table = table; this.onLeave = onLeave;
     this.rng = makeRng();
+    wireHurry(this, ['bettingPhase', 'askInsurance', 'awaitHuman'], () => (this.seats || []).filter((s) => !s.isHuman), (s) => this.talk(s, 'hurry'));
     chooseDeckBack(this.rng);
     this.shoe = new Shoe(6, this.rng);
     this.stopped = false; this.leaving = false;

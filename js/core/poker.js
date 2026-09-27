@@ -277,6 +277,18 @@ export class Hand {
     }
     const awards = [];
     pots.forEach((pot, potIndex) => {
+      // a pot only one player could win is their own uncalled chips coming back, not a win (e.g. the big stack's
+      // extra over a short all-in): marked refund so the table doesn't announce it as a split
+      if (pot.eligible.length === 1) {
+        const id = pot.eligible[0], me = this.byId(id);
+        // the part nobody else put in is theirs coming back; anything folded players added to it is a real win
+        const others = Math.max(0, ...this.players.filter((p) => p.id !== id).map((p) => p.committed));
+        const back = Math.min(pot.amount, Math.max(0, me.committed - others));
+        me.stack += pot.amount;
+        if (back > 0) awards.push({ playerId: id, amount: back, potIndex, hand: describe(scores[id]), told: describe(scores[id]), refund: true });
+        if (pot.amount > back) awards.push({ playerId: id, amount: pot.amount - back, potIndex, hand: describe(scores[id]), told: describe(scores[id]) });
+        return;
+      }
       let best = -1; let winners = [];
       for (const id of pot.eligible) {
         const s = scores[id];

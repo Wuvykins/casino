@@ -1,4 +1,5 @@
 // The farkle table: one to three of the family across from you, six big dice in the middle.
+import { wireHurry } from './hurry.js';
 import { h, clear, sleep, modal, toast } from './dom.js';
 import { chipStackEl, portraitEl, creditCardEl, askLeave, resultBanner, countTo } from './components.js';
 import { Game, scoreSelection, chooseKeep, shouldBank, bestKeep, TARGET, ENTRY } from '../core/farkle.js';
@@ -21,6 +22,7 @@ export class FarkleTable {
   constructor(root, table, buyIn, opponentIds, { onLeave, resume = null }) {
     this.root = root; this.table = table; this.onLeave = onLeave;
     this.rng = makeRng();
+    wireHurry(this, ['waitButton', 'awaitSelection'], () => (this.opps || []).map((c) => c.id), (id) => this.talk(id, 'hurry'));
     this.opps = opponentIds.slice(0, 3).map((id) => characterById(id));
     this.stopped = false; this.leaving = false;
     this.stack = buyIn;

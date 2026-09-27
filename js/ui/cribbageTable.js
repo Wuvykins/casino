@@ -1,4 +1,5 @@
 // The cribbage table: one opponent across from you, a board along the top, your cards big along the bottom.
+import { wireHurry } from './hurry.js';
 import { h, clear, sleep, modal, toast } from './dom.js';
 import { cardEl, chipStackEl, portraitEl, creditCardEl, chooseDeckBack, askLeave, resultBanner, countTo } from './components.js';
 import { Game, scorePlay, chooseDiscard, choosePlay, pegValue, TARGET } from '../core/cribbage.js';
@@ -37,6 +38,7 @@ export class CribbageTable {
   constructor(root, table, buyIn, opponentIds, { onLeave, resume = null }) {
     this.root = root; this.table = table; this.onLeave = onLeave;
     this.rng = makeRng();
+    wireHurry(this, ['waitDeal', 'waitButton', 'awaitDiscard', 'awaitPlay'], () => (this.char ? [this.char] : []), () => this.talk('hurry'));
     chooseDeckBack(this.rng);
     this.char = characterById(opponentIds[0]);
     this.opp = this.char.id;

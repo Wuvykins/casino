@@ -38,7 +38,7 @@ for (let h = 0; h < HANDS; h++) {
     if (voluntarily.has(s.id)) s.vpip++;
     if (raisedPre.has(s.id)) s.pfr++;
     if (hand.result.showdown && hand.result.revealed.some((r) => r.playerId === s.id)) s.wtsd++;
-    if (hand.result.awards.some((a) => a.playerId === s.id)) s.won++;
+    if (hand.result.awards.some((a) => a.playerId === s.id && !a.refund)) s.won++;
     updateMood(s.char.persona, s.mood, net, table.bb);
   }
   button = (button + 1) % seats.length;

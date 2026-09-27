@@ -67,6 +67,7 @@ const FALLBACK = { tauntPoker: 'taunt', tauntBlackjack: 'taunt', tauntCribbage: 
 
 export function pickLine(character, trigger, vars, rng) {
   const fb = FALLBACK[trigger];
+  if (Array.isArray(character?.lines?.[trigger]) && !character.lines[trigger].length) return null;   // an empty list = this character stays quiet here
   const own = character?.lines?.[trigger]?.length ? character.lines[trigger] : fb && character?.lines?.[fb]?.length ? character.lines[fb] : null;
   let pool = own || GENERIC_LINES[trigger] || (fb && GENERIC_LINES[fb]) || [];
   if (!pool.length) return null;

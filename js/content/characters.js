@@ -161,12 +161,53 @@ export const CHARACTERS = [
     },
   },
   {
-    id: 'rico', name: 'Rico', tagline: 'Has a story for every bet he makes', color: '#2e9e6b',
-    persona: { skill: 0.6, tight: 0.45, aggro: 0.75, bluff: 0.85, tilt: 0.4 },
+    // Nic's best friend since they were five — family. Friendly, loves playing, a little competitive, respects the player.
+    // Middle of the pack at every game, but in poker he tilts faster than anyone (tilt 0.85): one bad beat and he's
+    // raising light for a while. 'tilted' plays the moment his tilt first crosses 0.5 (holdemTable).
+    id: 'jon', real: true, name: 'Jon', tagline: 'Nic\'s best friend since they were five', color: '#2e7d9e',
+    persona: { skill: 0.55, tight: 0.5, aggro: 0.6, bluff: 0.3, tilt: 0.85, chatty: 1.2, cribSkill: 0.55 },
     lines: {
-      raise: ['I got it this time. Promise.', 'You don\'t want any of this.', 'Raise. Don\'t look at me like that.'],
-      caughtBluff: ['...okay, you got me.', 'Worth a shot!', 'I had outs! Sort of.'],
-      winBig: ['Never bluffing. Never.', 'Told you I had it.'],
+      greet: [{ text: 'Let\'s go.', file: '01-greet-1.mp3' }, { text: 'Deal me in.', file: '02-greet-2.mp3' }],
+      fold: [{ text: 'I\'m out.', file: '03-fold-1.mp3' }, { text: 'I fold.', file: '04-fold-2.mp3' }],
+      check: [],   // Nic: no check line — stays quiet (an empty list means silent, not the generic lines)
+      call: [{ text: 'I call.', file: '05-call.mp3' }],
+      raise: [{ text: 'I raise.', file: '06-raise.mp3' }],
+      allin: [{ text: 'I\'m all in.', file: '07-allin-1.mp3' }, { text: 'All in.', file: '08-allin-2.mp3' }],
+      winSmall: [{ text: 'Great.', file: '09-winsmall-1.mp3' }, { text: 'That\'s it?', file: '10-winsmall-2.mp3' }],
+      winBig: [{ text: 'Fuck yeah!', file: '11-winbig-1.mp3' }, { text: 'Nice.', file: '12-winbig-2.mp3' }],
+      lose: [{ text: 'Shit.', file: '13-lose.mp3' }],
+      loseBig: [{ text: 'Well, that sucks.', file: '14-losebig.mp3' }],
+      badBeat: [{ text: 'What the fuck.', file: '15-badbeat.mp3' }],
+      tilted: [{ text: 'Redo.', file: '16-tilted.mp3' }],
+      caughtBluff: [{ text: 'Well, shit.', file: '17-caughtbluff.mp3' }],
+      hurry: [{ text: 'Hurry the fuck up.', file: '18-hurry.mp3' }],
+      rebuy: [{ text: 'Deal me in.', file: '19-rebuy.mp3' }],
+      playerWin: [{ text: 'Good hand.', file: '20-playerwin.mp3' }],
+      playerBust: [{ text: 'Loser.', file: '21-playerbust.mp3' }],
+      taunt: [{ text: 'You sure about that?', file: '22-taunt.mp3' }],
+      hit: [{ text: 'Hit.', file: '23-hit.mp3' }],
+      stand: [{ text: 'Stand.', file: '24-stand.mp3' }],
+      split: [{ text: 'Split.', file: '25-split.mp3' }],
+      blackjack: [{ text: 'Blackjack.', file: '26-blackjack.mp3' }],
+      cribGo: ['Go.'],
+      cribPeg: ['That\'s two for me.'],
+      cribThirtyOne: ['Thirty-one for two!'],
+      cribGoodHand: ['Now that\'s a hand.'],
+      cribBadHand: ['That\'s a whole lot of nothing.'],
+      cribGoodCrib: ['Thanks for the crib!'],
+      cribBadCrib: ['You didn\'t give me much there.'],
+      cribHeels: ['Two for his heels!'],
+      cribGameWin: ['Good game! That was a close one.'],
+      cribGameLose: ['Good game. You got me.'],
+      cribSkunked: ['Oof. That\'s a skunk.'],
+      cribGotSkunked: ['Skunked. Don\'t tell Nic.'],
+      fkRoll: [{ text: 'Rolling.', file: '39-fkroll.mp3' }],
+      fkFarkle: [{ text: 'Farkle.', file: '40-fkfarkle.mp3' }],
+      fkHotDice: [{ text: 'Hot dice.', file: '41-fkhotdice.mp3' }],
+      fkBank: [{ text: 'Bank it.', file: '42-fkbank.mp3' }],
+      fkBankBig: [{ text: 'Banking that.', file: '43-fkbankbig.mp3' }],
+      fkPush: [{ text: 'Rolling again.', file: '44-fkpush.mp3' }],
+      tauntFarkle: [{ text: 'Farkle.', file: '45-tauntfarkle.mp3' }],
     },
   },
   {
@@ -180,4 +221,6 @@ export const CHARACTERS = [
   },
 ];
 
-export function characterById(id) { return CHARACTERS.find((c) => c.id === id); }
+// Retired cast ids still found in old saves (a table or tournament saved with Rico at it) come back as who replaced them.
+const RETIRED = { rico: 'jon' };
+export function characterById(id) { return CHARACTERS.find((c) => c.id === (RETIRED[id] || id)); }

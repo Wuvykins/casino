@@ -1,4 +1,5 @@
 // The Hold'em table: seats, chips, action bar, hand loop, opponents' talk. Sits on top of core/poker.js.
+import { wireHurry } from './hurry.js';
 import { h, clear, sleep, modal, toast } from './dom.js';
 import { cardEl, chipStackEl, portraitEl, playerAvatarEl, creditCardEl, chooseDeckBack, askLeave, resultBanner, countTo } from './components.js';
 import { Hand } from '../core/poker.js';
@@ -68,6 +69,7 @@ export class HoldemTable {
   constructor(root, table, buyIn, opponentIds, { onLeave, resume = null }) {
     this.root = root; this.table = table; this.onLeave = onLeave;
     this.rng = makeRng();
+    wireHurry(this, ['awaitHuman'], () => (this.seats || []).slice(1).filter((s) => s.stack > 0 && !s.out), (s) => this.talk(s, 'hurry'));   // opponents take turns telling you to hurry up
     chooseDeckBack(this.rng);
     this.button = 0;
     this.handNo = 0;
@@ -384,17 +386,18 @@ export class HoldemTable {
         }
         case 'award': {
           this.renderMoney(true);
-          const totalPot = ev.pots.reduce((a, p) => a + p.amount, 0);
-          const winners = [...new Set(ev.awards.map((a) => a.playerId))];
+          const won = ev.awards.filter((a) => !a.refund);   // refunds = uncalled chips going back to whoever covered the all-in
+          const totalPot = won.reduce((a, w) => a + w.amount, 0);
+          const winners = [...new Set(won.map((a) => a.playerId))];
           for (const id of winners) {
             const E = this.seatEls[id]; E.seatEl.classList.add('winner');
-            const amt = ev.awards.filter((a) => a.playerId === id).reduce((s, a) => s + a.amount, 0);
+            const amt = won.filter((a) => a.playerId === id).reduce((s, a) => s + a.amount, 0);
             const pop = h('div', { class: 'winpop' }, '+' + this.fmt(amt));
             E.seatEl.append(pop); setTimeout(() => pop.remove(), 2200);
           }
           if (ev.showdown) {
             // everyone who won a share of the main pot gets their five cards lit up (ties included)
-            const mainWinners = new Set(ev.awards.filter((a) => a.potIndex === 0).map((a) => a.playerId));
+            const mainWinners = new Set(won.filter((a) => a.potIndex === 0).map((a) => a.playerId));
             const rev = this.hand.result?.revealed || this.hand.events.find((e) => e.type === 'showdown')?.revealed || [];
             this.highlightBest(rev.filter((x) => mainWinners.has(x.playerId)));
           }
@@ -405,15 +408,15 @@ export class HoldemTable {
           const bigWin = humanGain >= this.game.bb * 25;
           audio.play(humanWon ? (bigWin ? 'bigwin' : 'win') : 'chips');
           const names = winners.map((id) => this.seatById(id).name).join(' & ');
-          this.say(null, ev.showdown ? `${names} win${winners.length > 1 ? '' : 's'} ${this.fmt(totalPot)} with ${ev.awards[0].told || ev.awards[0].hand}` : `${names} take${winners.length > 1 ? '' : 's'} ${this.fmt(totalPot)}`);
+          this.say(null, ev.showdown ? `${names} win${winners.length > 1 ? '' : 's'} ${this.fmt(totalPot)} with ${won[0].told || won[0].hand}` : `${names} take${winners.length > 1 ? '' : 's'} ${this.fmt(totalPot)}`);
           // chips slide from the pot to each winner
           await this.wait(350);
-          for (const id of winners) {
+          for (const id of [...new Set(ev.awards.map((a) => a.playerId))]) {   // refunds slide back too, just without the fanfare
             const amt = ev.awards.filter((a) => a.playerId === id).reduce((s, a) => s + a.amount, 0);
             this.flyChips(this.potEl, this.seatEls[id].plate, amt);
           }
           if (humanWon) {
-            const hand = ev.showdown ? ev.awards.find((a) => a.playerId === HUMAN)?.hand : null;
+            const hand = ev.showdown ? won.find((a) => a.playerId === HUMAN)?.hand : null;
             await this.wait(500);
             if (humanGain > 0 && bigWin) await this.winBanner(humanGain, hand, true);
             else if (humanGain > 0) await resultBanner(this.felt, { type: 'win', amount: humanGain, caption: hand ? '\u2660   ' + hand.toUpperCase() + '   \u2660' : '\u2660   HAND WON   \u2660' });
@@ -422,7 +425,7 @@ export class HoldemTable {
             // you went to the river and came second: say so properly (the loss sound goes with the banner)
             await this.wait(400);
             audio.play('lose', { volume: 0.4 }); this.lossSoundPlayed = true;
-            await resultBanner(this.felt, { type: 'lose', amount: this.hand.result.net[HUMAN], title: `${names} win${winners.length > 1 ? '' : 's'}`, caption: ev.awards[0].hand ? (ev.awards[0].told || ev.awards[0].hand).toUpperCase() : 'HAND COMPLETE' });
+            await resultBanner(this.felt, { type: 'lose', amount: this.hand.result.net[HUMAN], title: `${names} win${winners.length > 1 ? '' : 's'}`, caption: won[0]?.hand ? (won[0].told || won[0].hand).toUpperCase() : 'HAND COMPLETE' });
           } else {
             await this.wait(700);
           }
@@ -628,8 +631,6 @@ export class HoldemTable {
         // the call is all-in; make that obvious
         const c = bar.querySelector('.call'); clear(c); c.append('All in ', h('span', { class: 'amt' }, this.fmt(legal.callAmount)));
       }
-      // opponents get impatient
-      this.hurryT = setTimeout(() => { const s = this.rng.pick(this.seats.slice(1).filter((x) => x.stack > 0)); if (s) this.talk(s, 'hurry'); }, 14000);
     });
   }
 
@@ -667,9 +668,9 @@ export class HoldemTable {
   async finishHand() {
     const hand = this.hand; const res = hand.result;
     const human = this.human;
-    const pot = res.awards.reduce((a, b) => a + b.amount, 0);
+    const pot = res.awards.filter((a) => !a.refund).reduce((a, b) => a + b.amount, 0);
     const humanNet = res.net[HUMAN] || 0;
-    const humanWon = res.awards.some((a) => a.playerId === HUMAN);
+    const humanWon = res.awards.some((a) => a.playerId === HUMAN && !a.refund);
     this.lastHumanWon = humanWon;
     const humanRev = res.revealed.find((r) => r.playerId === HUMAN);
     bank.recordHand({ won: humanWon, showdown: res.showdown, pot: this.tourney ? 0 : pot, net: this.tourney ? 0 : humanNet, handName: humanRev?.hand, handScore: humanRev?.score });   // tournament chips don't count as money
@@ -679,14 +680,17 @@ export class HoldemTable {
     // table talk about the result
     const bigPot = humanNet >= this.game.bb * 25; // a big win for you, judged by what you gained
     for (const s of this.seats.slice(1)) {
-      const won = res.awards.some((a) => a.playerId === s.id);
+      const won = res.awards.some((a) => a.playerId === s.id && !a.refund);
       const rev = res.revealed.find((r) => r.playerId === s.id);
       const net = res.net[s.id] || 0;
       const bigForThem = net >= this.game.bb * 25;
+      const tiltBefore = s.mood.tilt;
       updateMood(s.char.persona, s.mood, net, this.game.bb);
-      const expr = bigForThem ? 'happy' : net <= -8 * this.game.bb ? 'mad' : null;
+      const tiltedNow = tiltBefore < 0.5 && s.mood.tilt >= 0.5 && !won && this.talk(s, 'tilted', {}, 0.9);   // only characters with 'tilted' lines (Jon) say it
+      const expr = bigForThem ? 'happy' : net <= -8 * this.game.bb || tiltedNow ? 'mad' : null;
       if (expr) this.setExpression(s, expr);
-      if (won) { this.talk(s, bigForThem ? 'winBig' : 'winSmall', {}, bigForThem ? 0.9 : 0.35); }
+      if (tiltedNow) { /* that was his line for this hand */ }
+      else if (won) { this.talk(s, bigForThem ? 'winBig' : 'winSmall', {}, bigForThem ? 0.9 : 0.35); }
       else if (rev) {
         const cat = category(rev.score);
         if (cat >= 3 || (cat === 2 && -net >= this.game.bb * 12)) { this.talk(s, 'badBeat', {}, 0.85); }
