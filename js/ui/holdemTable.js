@@ -255,6 +255,11 @@ export class HoldemTable {
         this.updateSeat(s);
       }
     }
+    // now and then someone fills the gap between hands with an 'idle' line (only characters who have their own)
+    if (this.handNo > 0 && this.rng.chance(0.12)) {
+      const s = this.rng.pick(this.seats.slice(1).filter((x) => x.stack > 0 && !x.out && x.char?.lines?.idle?.length));
+      if (s && this.talk(s, 'idle')) await this.wait(1200);
+    }
     this.saveTourney();   // tournament: closing the game from here on resumes at this hand
     this.checkpoint();    // cash table: same idea
     const players = this.seats.filter((s) => s.stack > 0).map((s) => ({ id: s.id, name: s.name, stack: s.stack, seat: s.seat }));
@@ -408,7 +413,8 @@ export class HoldemTable {
           const bigWin = humanGain >= this.game.bb * 25;
           audio.play(humanWon ? (bigWin ? 'bigwin' : 'win') : 'chips');
           const names = winners.map((id) => this.seatById(id).name).join(' & ');
-          this.say(null, ev.showdown ? `${names} win${winners.length > 1 ? '' : 's'} ${this.fmt(totalPot)} with ${won[0].told || won[0].hand}` : `${names} take${winners.length > 1 ? '' : 's'} ${this.fmt(totalPot)}`);
+          if (ev.showdown) this.sayLines(this.potLines(won));
+          else this.say(null, `${names} take${winners.length > 1 ? '' : 's'} ${this.fmt(totalPot)}`);
           // chips slide from the pot to each winner
           await this.wait(350);
           for (const id of [...new Set(ev.awards.map((a) => a.playerId))]) {   // refunds slide back too, just without the fanfare
@@ -542,6 +548,31 @@ export class HoldemTable {
   setTag(id, text, kind = '') { const E = this.seatEls[id]; if (!E) return; E.tag.textContent = text; E.tag.className = 'action-tag show ' + kind; }
   highlightActor(id) { for (const [k, E] of Object.entries(this.seatEls)) E.seatEl.classList.toggle('acting', k === id); }
   say(seat, text) { this.msgEl.textContent = text; }
+  sayLines(lines) { clear(this.msgEl); for (const l of lines) this.msgEl.append(h('span', { class: 'msg-line' }, l)); }
+
+  // One line per pot, so a side pot doesn't read as a split: "Courtney wins 1,800 with Pair of 10s" /
+  // "Side pot: Ni wins 1,170 with A high". Pots in a row won by the same people are added together.
+  potLines(won) {
+    const groups = [];
+    for (const a of won) {
+      const g = groups.find((x) => x.potIndex === a.potIndex);
+      if (g) { g.amount += a.amount; if (!g.ids.includes(a.playerId)) g.ids.push(a.playerId); }
+      else groups.push({ potIndex: a.potIndex, ids: [a.playerId], amount: a.amount, hand: a.told || a.hand });
+    }
+    groups.sort((x, y) => x.potIndex - y.potIndex);
+    const merged = [];
+    for (const g of groups) {
+      const last = merged[merged.length - 1];
+      if (last && last.ids.length === g.ids.length && last.ids.every((id) => g.ids.includes(id))) last.amount += g.amount;
+      else merged.push({ ...g });
+    }
+    return merged.map((g, i) => {
+      const names = g.ids.map((id) => this.seatById(id).name).join(' & ');
+      const verb = g.ids.length > 1 ? 'split' : 'wins';
+      const label = merged.length > 1 && i > 0 ? (merged.length > 2 ? `Side pot ${i}: ` : 'Side pot: ') : '';
+      return `${label}${names} ${verb} ${this.fmt(g.amount)} with ${g.hand}`;
+    });
+  }
 
   // p = how likely they are to say something here; a character's `chatty` dial scales it (2 = twice as mouthy, 0.5 = quiet).
   // The text bubble always shows, and the recording plays too when the line has one.

@@ -1039,3 +1039,7 @@ label.check { font-family: Georgia, 'Times New Roman', serif; color: #eee5cc; }
   .hr-text b { font-size: 13px; } .hr-text span { font-size: 10.5px; }
   .hand-ranks .modal-buttons { margin-top: 6px; }
 }
+
+/* showdown message: one line per pot (main pot, then side pots) */
+.table-msg .msg-line { display: block; overflow: hidden; text-overflow: ellipsis; }
+.table-msg .msg-line + .msg-line { font-size: .86em; opacity: .92; margin-top: 1px; }
