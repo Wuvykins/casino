@@ -23,7 +23,7 @@ page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => { if (m.type() === 'error' && !/404/.test(m.text())) errors.push('console: ' + m.text()); });
 const enter = async () => { await page.waitForSelector('#splash.ready', { timeout: 8000 }).then(() => page.tap('#splash')).catch(() => {}); await page.waitForSelector('#splash.can-skip', { timeout: 3000 }).then(() => page.tap('#splash')).catch(() => {}); };
 await page.goto(url); await enter();
-await page.waitForSelector('input[placeholder*="call you"]', { timeout: 10000 }); await page.fill('input[placeholder*="call you"]', 'Nic'); await page.click("text=Let's play"); await page.waitForSelector('.lobby');
+await page.waitForSelector('.wn-input', { timeout: 10000 }); await page.fill('.wn-input', 'Nic'); await page.click('.wn-go'); await page.waitForSelector('.lobby');
 await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('casino.save.v1')); s.settings = { ...(s.settings || {}), aiSpeed: 3, sound: false, music: false }; localStorage.setItem('casino.save.v1', JSON.stringify(s)); });
 await page.reload(); await enter(); await page.waitForSelector('.lobby');
 const bank0 = await page.evaluate(() => JSON.parse(localStorage.getItem('casino.save.v1')).bank);

@@ -20,8 +20,8 @@ for (const [size, viewport, notch] of [['phone', { width: 844, height: 390 }, tr
   await page.waitForSelector('#splash.ready', { timeout: 8000 }).catch(() => {}); await shot('splash');
   await enter();
   if (notch) await page.addStyleTag({ content: ':root{--safe-l:47px;--safe-r:47px;--safe-b:21px}' });
-  await page.waitForSelector('input[placeholder*="call you"]'); await shot('name');
-  await page.fill('input[placeholder*="call you"]', 'Nic'); await page.click("text=Let's play"); await page.waitForSelector('.lobby');
+  await page.waitForSelector('.wn-input'); await shot('name');
+  await page.fill('.wn-input', 'Nic'); await page.click('.wn-go'); await page.waitForSelector('.lobby');
   await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('casino.save.v1')); s.bank = 60000; s.tierId = 3; s.settings = { ...(s.settings || {}), sound: false, music: false, aiSpeed: 3 }; localStorage.setItem('casino.save.v1', JSON.stringify(s)); });
   await page.reload(); await enter(); await page.waitForSelector('.lobby');
   if (notch) await page.addStyleTag({ content: ':root{--safe-l:47px;--safe-r:47px;--safe-b:21px}' });

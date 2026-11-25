@@ -14,7 +14,7 @@ for (const [label, vp, notch] of [['phone', { width: 844, height: 390 }, true], 
   await page.goto(url);
   if (notch) await page.addStyleTag({ content: ':root{--safe-l:47px;--safe-r:47px;--safe-b:21px}' });
   await page.waitForSelector('#splash.ready', { timeout: 8000 }).then(() => page.click('#splash')).catch(() => {}); await page.waitForSelector('#splash.can-skip', { timeout: 3000 }).then(() => page.click('#splash')).catch(() => {});
-  await page.waitForSelector('input[placeholder*="call you"]'); await page.fill('input[placeholder*="call you"]', 'Nic'); await page.click("text=Let's play"); await page.waitForSelector('.lobby');
+  await page.waitForSelector('.wn-input'); await page.fill('.wn-input', 'Nic'); await page.click('.wn-go'); await page.waitForSelector('.lobby');
   await page.click(`button.hotspot[title="Texas Hold'em"]`); await page.waitForSelector('.select-screen');
   await page.click('.table-tile:not(.locked)'); await page.waitForSelector('.cast-grid'); await page.click('.modal button:has-text("Sit down")');
   await page.waitForSelector('.table-screen .help-btn');

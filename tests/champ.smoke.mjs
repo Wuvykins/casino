@@ -24,7 +24,7 @@ for (const [tag, viewport, safe] of [['phone', { width: 844, height: 390 }, true
   page.on('console', (m) => { if (m.type() === 'error' && !/404/.test(m.text())) errors.push(tag + ' console: ' + m.text()); });
   const enter = async () => { await page.waitForSelector('#splash.ready', { timeout: 8000 }).then(() => page.tap('#splash')).catch(() => {}); await page.waitForSelector('#splash.can-skip', { timeout: 3000 }).then(() => page.tap('#splash')).catch(() => {}); };
   await page.goto(url); await enter();
-  await page.waitForSelector('input[placeholder*="call you"]', { timeout: 10000 }); await page.fill('input[placeholder*="call you"]', 'Nic'); await page.click("text=Let's play"); await page.waitForSelector('.lobby');
+  await page.waitForSelector('.wn-input', { timeout: 10000 }); await page.fill('.wn-input', 'Nic'); await page.click('.wn-go'); await page.waitForSelector('.lobby');
   if (safe) await page.addStyleTag({ content: ':root{--safe-l:47px;--safe-r:47px;--safe-b:21px}' });
   await page.click('button.hotspot[data-game="holdem"]'); await page.waitForSelector('.select-screen');
   await page.click('.table-tile:has-text("The Open")'); await page.waitForSelector('.modal button:has-text("Sit down")');

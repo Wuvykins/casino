@@ -12,7 +12,7 @@ const errors = []; page.on('pageerror', (e) => errors.push('pageerror: ' + e.mes
 await page.addInitScript(() => { window.__hurryMs = [1500, 2600]; window.__said = []; new MutationObserver((ms) => { for (const m of ms) { const b = m.target.closest?.('.bubble, .speech, [class*="bubble"]'); if (b && b.classList.contains('show')) window.__said.push({ t: performance.now(), text: b.textContent, who: b.closest('[data-id], .seat, .bj-seat, .fk-seat, .cb-opp')?.textContent?.slice(0, 30) }); } }).observe(document, { subtree: true, attributes: true, attributeFilter: ['class'] }); });
 await page.goto(url);
 await page.waitForSelector('#splash.ready', { timeout: 8000 }).then(() => page.click('#splash')).catch(() => {}); await page.waitForSelector('#splash.can-skip', { timeout: 3000 }).then(() => page.click('#splash')).catch(() => {});
-await page.waitForSelector('input[placeholder*="call you"]'); await page.fill('input[placeholder*="call you"]', 'Dad'); await page.click("text=Let's play"); await page.waitForSelector('.lobby');
+await page.waitForSelector('.wn-input'); await page.fill('.wn-input', 'Dad'); await page.click('.wn-go'); await page.waitForSelector('.lobby');
 const out = [];
 for (const [game, ready] of [["Texas Hold'em", '.actionbar:not(.hidden) button.act'], ['Blackjack', '.actionbar.betting:not(.hidden)'], ['Cribbage', '.cb-deal-mid.show'], ['Farkle', '.actionbar:not(.hidden) button.act']]) {
   await page.click(`button.hotspot[title="${game}"]`); await page.waitForSelector('.select-screen');

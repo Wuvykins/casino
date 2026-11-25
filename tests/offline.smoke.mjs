@@ -14,7 +14,7 @@ const errors = [];
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 const enter = async () => { await page.waitForSelector('#splash.ready', { timeout: 10000 }).then(() => page.tap('#splash')).catch(() => {}); await page.waitForSelector('#splash.can-skip', { timeout: 3000 }).then(() => page.tap('#splash')).catch(() => {}); };
 await page.goto(url); await enter();
-await page.waitForSelector('input[placeholder*="call you"]'); await page.fill('input[placeholder*="call you"]', 'Dad'); await page.click("text=Let's play"); await page.waitForSelector('.lobby');
+await page.waitForSelector('.wn-input'); await page.fill('.wn-input', 'Dad'); await page.click('.wn-go'); await page.waitForSelector('.lobby');
 await page.waitForFunction(() => navigator.serviceWorker?.controller || navigator.serviceWorker?.ready, null, { timeout: 20000 });
 await page.evaluate(() => navigator.serviceWorker.ready);
 await page.click('.settings-btn'); await page.click('.overlay button:has-text("Casino Radio")');
