@@ -6,12 +6,15 @@ import { h } from './dom.js';
 import { audio, music } from '../core/audio.js';
 import { assets } from '../core/assets.js';
 import { fmt$ } from '../core/bank.js';
+import { BANKER } from '../content/characters.js';
+import { pickLine } from '../content/lines.js';
 
 const clamp = (v) => Math.max(0, Math.min(1, v));
 const ease = (v) => 1 - Math.pow(1 - clamp(v), 3);
 const CLAP_START = 2.15, CLAP_PERIOD = 0.8, CLAP_CYCLE = [0, 1, 2, 3, 2, 1];
 const CLAP_END = CLAP_START + 3.5 * CLAP_PERIOD;   // 4.95: the fourth clap, after which the hands stay together
 const CLAPS = [2.55, 3.35, 4.15, 4.95];
+const KEN_AT = 5.45;   // Ken's 'next chapter' line, just after the last clap
 
 function loadImage(url) {
   return new Promise((resolve) => { const im = new Image(); im.onload = () => resolve(im); im.onerror = () => resolve(null); im.src = url; });
@@ -23,6 +26,8 @@ export async function championship({ winner, prize, players, tableName }) {
   return new Promise((resolve) => {
     let done = false;
     const canvas = h('canvas', { class: 'champ-canvas' });
+    const kenLine = pickLine(BANKER, 'champion', {});
+    const kenSays = h('div', { class: 'champ-ken' }, kenLine ? `Ken: “${kenLine.text}”` : '');
     const ctx = canvas.getContext('2d');
     const plaque = h('div', { class: 'champ-plaque' },
       trophy ? h('img', { class: 'champ-trophy', src: trophy.src, alt: '' }) : h('div', { class: 'champ-trophy' }),
@@ -33,6 +38,7 @@ export async function championship({ winner, prize, players, tableName }) {
       h('div', { class: 'champ-eyebrow small' }, 'PRIZE'),
       h('div', { class: 'champ-prize' }, fmt$(prize)),
       h('div', { class: 'champ-sub' }, tableName),
+      kenSays,
       h('button', { class: 'btn primary champ-collect', onClick: () => finish() }, 'Collect'),
     );
     const root = h('div', { class: 'champ' }, canvas, plaque);
@@ -50,6 +56,8 @@ export async function championship({ winner, prize, players, tableName }) {
     music.duck(true);
     audio.play('victory', { volume: 0.9 });
     for (const at of CLAPS) timers.push(setTimeout(() => { if (!done) audio.play('clap', { volume: 0.7 }); }, at * 1000));
+    // Ken chimes in once the applause is done
+    if (kenLine) timers.push(setTimeout(async () => { if (done) return; if (!audio.voice(BANKER, kenLine.file)) { await audio.voiceDone(6000); if (!done) audio.voice(BANKER, kenLine.file); } if (!done) kenSays.classList.add('show'); }, KEN_AT * 1000));   // if someone's still talking, he waits for them
 
     let W = 0, H = 0, dpr = 1;
     const size = () => {

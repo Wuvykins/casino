@@ -204,7 +204,9 @@ export async function askKen(root, ctx) {
       if (assets.bg(kenFace, face)) { kenFace.classList.remove('placeholder'); clear(kenFace); }
       const bubble = h('div', { class: 'ken-bubble' }, '…');
       const youLine = h('div', { class: 'you-line' }, '');
+      let thanks = null;   // set while Ken is talking: the same button then just closes the scene
       const btn = h('button', { class: 'btn primary', onClick: async () => {
+        if (thanks) { audio.play('tap'); thanks(); return; }
         btn.disabled = true;
         audio.play('tap');
         await sleep(700);
@@ -212,8 +214,12 @@ export async function askKen(root, ctx) {
         const trigger = s.bailouts > 1 ? 'bailoutAgain' : 'bailout';
         const line = pickLine(BANKER, trigger, { player: name, amount: fmt$(amount) });
         bubble.textContent = line?.text || `Ken gave you ${fmt$(amount)}, go have fun.`;
-        audio.voice(BANKER, line?.file) || audio.play('bailout');
-        await sleep(1800);
+        youLine.textContent = `+${fmt$(amount)} from Ken`;
+        const talking = audio.voice(BANKER, line?.file);
+        if (!talking) audio.play('bailout');
+        // let him finish his rant (or tap "Thanks, Ken" to move on)
+        btn.textContent = 'Thanks, Ken'; btn.disabled = false;
+        await Promise.race([talking ? audio.voiceDone().then(() => sleep(600)) : sleep(1800), new Promise((r) => { thanks = r; })]);
         close(change);
       } }, 'Ask Ken for money');
       el.append(h('div', { class: 'ken-scene' }, kenFace, h('div', { class: 'ken-right' }, h('div', { class: 'ken-name' }, 'Ken'), bubble, youLine, btn)));
@@ -367,8 +373,21 @@ export async function askName() {
       const input = h('input', { type: 'text', maxlength: 18, placeholder: 'What should we call you?', autofocus: true });
       const go = () => { name = input.value.trim(); if (name) close(); };
       input.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
-      el.append(h('p', {}, 'Ken at the bank will need a name for your card.'), input, h('div', { class: 'modal-buttons' }, h('button', { class: 'btn primary', onClick: go }, "Let's play")));
+      // Ken greets you (his recording + the words in a bubble) while you type your name
+      const line = pickLine(BANKER, 'welcome', {});
+      const kenFace = portraitEl({ id: 'ken', name: 'Ken', color: BANKER.color }, { size: 'lg' });
+      if (assets.bg(kenFace, 'lobby.ken')) { kenFace.classList.remove('placeholder'); clear(kenFace); }
+      el.append(
+        h('div', { class: 'ken-scene welcome-ken' }, kenFace, h('div', { class: 'ken-right' }, h('div', { class: 'ken-name' }, 'Ken'), h('div', { class: 'ken-bubble' }, line?.text || 'Ken at the bank will need a name for your card.'))),
+        input, h('div', { class: 'modal-buttons' }, h('button', { class: 'btn primary', onClick: go }, "Let's play")),
+      );
       setTimeout(() => input.focus(), 250);
+      // sound only works after a tap: say it now if the player already tapped (skipping the intro), otherwise on their first tap
+      if (line?.file) {
+        const say = () => audio.voice(BANKER, line.file);
+        if (audio.unlocked) setTimeout(say, 450);
+        else { const once = () => { document.removeEventListener('pointerdown', once, true); document.removeEventListener('keydown', once, true); setTimeout(say, 60); }; document.addEventListener('pointerdown', once, true); document.addEventListener('keydown', once, true); }
+      }
     },
   });
   bank.setName(name);

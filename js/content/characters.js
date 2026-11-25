@@ -23,8 +23,10 @@
 export const BANKER = {
   id: 'ken', name: 'Ken', color: '#5b6b7a',
   lines: {
-    bailout: ['Ken gave you {amount}, go have fun.'],
-    bailoutAgain: ['Ken gave you {amount}, go have fun.'],
+    welcome: [{ text: "Alright, man, here's a thousand bucks. Here's the deal: 50/50. You win, I get half.", file: '01-welcome.mp3' }],   // first launch, on the name screen
+    bailout: [{ text: "Dude, my aching ass. You gotta be kidding me. Alright, here you go. If you don't win, don't come back without money.", file: '02-bailout.mp3' }],   // the first time you ask Ken for money
+    bailoutAgain: [{ text: "Oh, you're fucking kidding me. I am gonna have to cut rice in half to feed my fucking kids now. Dude, here you go. Fucking don't let me down again.", file: '03-bailout-again.mp3' }],   // every time after that
+    champion: [{ text: "Hell yeah, dude, we're moving on to the next chapter!", file: '04-champion.mp3' }],   // tournament win ceremony, after the claps
   },
 };
 

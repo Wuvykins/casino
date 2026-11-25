@@ -48,6 +48,7 @@ export const audio = {
   get musicVolume() { const v = bank.state?.settings?.musicVolume; return typeof v === 'number' ? v : 0.7; },   // 0..1.5: 0.7 is the standard level, above 1 is a boost
   get sfxVolume() { const v = bank.state?.settings?.sfxVolume; return typeof v === 'number' ? v : 1; },
   get voiceVolume() { const v = bank.state?.settings?.voiceVolume; return typeof v === 'number' ? v : 1; },
+  get unlocked() { return unlocked; },   // true once the player has tapped (browsers block sound before that)
   get voicesEnabled() { return bank.state?.settings?.voices !== false; },
 
   play(key, opts = {}) {
@@ -75,6 +76,11 @@ export const audio = {
     if (voiceNow && !voiceNow.paused && !voiceNow.ended) return false;   // someone is already talking: this line is skipped rather than talked over
     voiceNow = playClip(assets.fileUrl(`voice/${character.id}/${file}`), this.voiceVolume);
     return true;
+  },
+  // Resolves when the line that's playing now has finished (or right away if nobody is talking). Gives up after maxMs.
+  voiceDone(maxMs = 20000) {
+    const v = voiceNow, t0 = Date.now();
+    return new Promise((resolve) => { const tick = () => (!v || v.ended || v.paused || Date.now() - t0 > maxMs ? resolve() : setTimeout(tick, 150)); setTimeout(tick, 300); });
   },
 };
 
